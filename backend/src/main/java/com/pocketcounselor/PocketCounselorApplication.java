@@ -16,7 +16,7 @@ public class PocketCounselorApplication {
         // Start the Spring Boot application
         SpringApplication.run(PocketCounselorApplication.class, args);
         System.out.println(" Pocket Counselor backend is running!");
-        System.out.println("📍 API available at: http://localhost:8080/api/analyze");
+        System.out.println(" API available at: http://localhost:8080/api/analyze");
     }
 }
 
