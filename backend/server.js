@@ -181,15 +181,10 @@ app.get('/api/session/:id/results', async (req, res) => {
     session._resultsRequested = true;
     session._resultsCache = aiResults;
 
-    if (session._hasLowDataWarning) {
-      const response = { ...aiResults, data_quality_note: 'Veri az olduğu için profil kalitesi düşük olabilir.' };
-      session._resultsCache = response;
-      return res.json(response);
-    }
-
     return res.json(aiResults);
   } catch (error) {
-    console.error('Results generation failed:', error.message);
+    if (error.message === 'AI schema error') console.error('AI schema error');
+    else console.error('Results generation failed:', error.message);
     return res.json({
       profile_quality: getProfileLabel(session.checkpoints.reached),
       overall_summary: 'Results could not be generated.',
