@@ -1,7 +1,7 @@
 /**
  * QUIZ UI LOGIC
  * Non-blocking: submits answer, immediately shows next question.
- * Polls /status to detect checkpoints and warnings.
+ * Polls /state to detect checkpoints and warnings.
  */
 
 // ─── State ───────────────────────────────────────────
@@ -106,18 +106,18 @@ async function pollStatus() {
     if (!sessionId) return;
 
     try {
-        const res = await fetch(`/api/session/${sessionId}/status`);
+        const res = await fetch(`/api/session/${sessionId}/state`);
         if (!res.ok) return;
 
         const data = await res.json();
 
         // Show warning if any
         if (data.warning) {
-            showToast(data.warning, 'warning');
+            showToast(data.warning === 'invalid_hard' ? 'Geçersiz cevap sayısı yüksek. Sonuç kalitesi düşebilir.' : 'Bazı cevaplar geçersiz algılandı.', 'warning');
         }
 
         // Handle checkpoint
-        if (data.checkpoint) {
+        if (data.checkpoint_reached_now && data.checkpoint) {
             stopStatusPolling();
             if (data.checkpoint.autoShow) {
                 showResults();

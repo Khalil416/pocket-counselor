@@ -93,10 +93,10 @@ function renderResults(data) {
         }
 
         // ─── Needs attention ─────────────────────────────
-        if (data.needs_attention && data.needs_attention.length > 0 && attentionSection && attentionContainer) {
+        if (data.growth_areas && data.growth_areas.length > 0 && attentionSection && attentionContainer) {
             attentionSection.style.display = 'block';
             attentionContainer.innerHTML = '';
-            data.needs_attention.forEach(area => {
+            data.growth_areas.forEach(area => {
                 const li = document.createElement('li');
                 li.textContent = area.reason;
                 attentionContainer.appendChild(li);
