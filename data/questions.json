@@ -1,0 +1,550 @@
+{
+    "questions": [
+        {
+            "id": 1,
+            "tier": 1,
+            "signal_level": "high",
+            "expected_points": {
+                "minimum": 18,
+                "target": 35,
+                "excellent": 65
+            },
+            "backup_for": null,
+            "text": "When you are trying to understand why something went wrong, what is your typical thought process? Walk me through the steps."
+        },
+        {
+            "id": 2,
+            "tier": 1,
+            "signal_level": "high",
+            "expected_points": {
+                "minimum": 18,
+                "target": 35,
+                "excellent": 65
+            },
+            "backup_for": null,
+            "text": "You have five tasks today but only time for three. Two are urgent, two are important long-term, and one is quick but low-priority. How do you decide what to do?"
+        },
+        {
+            "id": 3,
+            "tier": 1,
+            "signal_level": "high",
+            "expected_points": {
+                "minimum": 20,
+                "target": 38,
+                "excellent": 70
+            },
+            "backup_for": null,
+            "text": "You need to explain a complex idea to three different people: a curious 8-year-old, a busy executive, and a technical expert. How would your explanations differ?"
+        },
+        {
+            "id": 4,
+            "tier": 1,
+            "signal_level": "high",
+            "expected_points": {
+                "minimum": 18,
+                "target": 36,
+                "excellent": 68
+            },
+            "backup_for": null,
+            "has_backup": true,
+            "backup_question_id": 16,
+            "text": "You are planning a group activity where some people have experience and others are complete beginners. How do you decide who does what and how responsibilities are shared?"
+        },
+        {
+            "id": 5,
+            "tier": 1,
+            "signal_level": "high",
+            "expected_points": {
+                "minimum": 16,
+                "target": 32,
+                "excellent": 60
+            },
+            "backup_for": null,
+            "text": "Describe a disagreement you have had with someone where you both ended up understanding each other better. What made the difference?"
+        },
+        {
+            "id": 6,
+            "tier": 1,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 14,
+                "target": 28,
+                "excellent": 52
+            },
+            "backup_for": null,
+            "text": "You are working on something and realize halfway through that your original approach is not going to work. What goes through your mind, and what do you do?"
+        },
+        {
+            "id": 7,
+            "tier": 1,
+            "signal_level": "high",
+            "expected_points": {
+                "minimum": 20,
+                "target": 40,
+                "excellent": 75
+            },
+            "backup_for": null,
+            "has_backup": true,
+            "backup_question_id": 29,
+            "text": "You are given a large amount of data or information that feels overwhelming at first. How do you approach making sense of it and finding what matters most?"
+        },
+        {
+            "id": 8,
+            "tier": 1,
+            "signal_level": "high",
+            "expected_points": {
+                "minimum": 18,
+                "target": 34,
+                "excellent": 64
+            },
+            "backup_for": null,
+            "text": "You are teaching someone a skill you are good at, but they learn very differently from you. How do you adjust your approach?"
+        },
+        {
+            "id": 9,
+            "tier": 1,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 14,
+                "target": 28,
+                "excellent": 55
+            },
+            "backup_for": null,
+            "has_backup": true,
+            "backup_question_id": 28,
+            "text": "If you were asked to come up with ten completely different uses for a paper clip, what would you say, and how would you come up with them?"
+        },
+        {
+            "id": 10,
+            "tier": 1,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 12,
+                "target": 26,
+                "excellent": 48
+            },
+            "backup_for": null,
+            "text": "Think of something that took you longer than expected to finish. What kept you going, and what did you learn about yourself?"
+        },
+        {
+            "id": 11,
+            "tier": 1,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 14,
+                "target": 28,
+                "excellent": 52
+            },
+            "backup_for": null,
+            "text": "You are in a group and things start to feel tense or uncomfortable. What do you tend to do, and why?"
+        },
+        {
+            "id": 12,
+            "tier": 1,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 12,
+                "target": 24,
+                "excellent": 46
+            },
+            "backup_for": null,
+            "text": "You are given a task with very specific instructions, but you can see a different way that might work better. What do you do?"
+        },
+        {
+            "id": 13,
+            "tier": 1,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 12,
+                "target": 25,
+                "excellent": 48
+            },
+            "backup_for": null,
+            "text": "Describe the difference between how you work when you are on a tight deadline versus when you have plenty of time."
+        },
+        {
+            "id": 14,
+            "tier": 1,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 22,
+                "excellent": 42
+            },
+            "backup_for": null,
+            "text": "When you walk into a new space — like a room, building, or outdoor area — what kinds of things do you notice first, and what do you tend to overlook?"
+        },
+        {
+            "id": 15,
+            "tier": 1,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 12,
+                "target": 24,
+                "excellent": 45
+            },
+            "backup_for": null,
+            "text": "Think of a time when something did not go as planned. What do you remember feeling, and how did that affect what you did next?"
+        },
+        {
+            "id": 16,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 14,
+                "target": 28,
+                "excellent": 54
+            },
+            "backup_for": 4,
+            "text": "You are organizing a group activity where some people have experience and others are complete beginners. How do you decide who does what?"
+        },
+        {
+            "id": 17,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 14,
+                "target": 28,
+                "excellent": 52
+            },
+            "backup_for": null,
+            "text": "When you have several pieces of information that do not clearly connect at first, how do you usually make sense of them?"
+        },
+        {
+            "id": 18,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 14,
+                "target": 28,
+                "excellent": 54
+            },
+            "backup_for": null,
+            "text": "Think about a recent situation where something did not work as expected. How did you figure out what the real issue was, and what details helped you understand it?"
+        },
+        {
+            "id": 19,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 12,
+                "target": 24,
+                "excellent": 46
+            },
+            "backup_for": null,
+            "text": "Think about a time when someone did not understand what you were trying to say. What did you do to get your point across?"
+        },
+        {
+            "id": 20,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 12,
+                "target": 26,
+                "excellent": 48
+            },
+            "backup_for": null,
+            "text": "Someone gives you incomplete information about something you need to figure out. Describe what you would typically do next."
+        },
+        {
+            "id": 21,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 12,
+                "target": 24,
+                "excellent": 46
+            },
+            "backup_for": null,
+            "text": "When you have several things competing for your attention at the same time, how do you decide what to focus on?"
+        },
+        {
+            "id": 22,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 14,
+                "target": 30,
+                "excellent": 58
+            },
+            "backup_for": null,
+            "text": "Imagine two people you know have completely opposite opinions on something important. How would you navigate a conversation between them?"
+        },
+        {
+            "id": 23,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 12,
+                "target": 26,
+                "excellent": 50
+            },
+            "backup_for": null,
+            "text": "Think of something that was really challenging when you first encountered it. What changed that made it easier over time?"
+        },
+        {
+            "id": 24,
+            "tier": 2,
+            "signal_level": "standard",
+            "expected_points": {
+                "minimum": 8,
+                "target": 18,
+                "excellent": 34
+            },
+            "backup_for": null,
+            "text": "What bothers you more: when things are disorganized and messy, or when things are too rigid and structured? Why?"
+        },
+        {
+            "id": 25,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 12,
+                "target": 26,
+                "excellent": 50
+            },
+            "backup_for": null,
+            "text": "Someone comes to you frustrated about a problem they are facing. Walk me through what you would typically do or say."
+        },
+        {
+            "id": 26,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 22,
+                "excellent": 42
+            },
+            "backup_for": null,
+            "text": "What kinds of tasks do you find yourself putting off, and what eventually gets you to start them?"
+        },
+        {
+            "id": 27,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 12,
+                "target": 26,
+                "excellent": 50
+            },
+            "backup_for": null,
+            "text": "You are offered two opportunities that conflict. One is familiar and reliable, the other is new and uncertain. How do you think through which to choose?"
+        },
+        {
+            "id": 28,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 14,
+                "target": 30,
+                "excellent": 58
+            },
+            "backup_for": 9,
+            "text": "You are asked to come up with ideas for improving something you use every day — like a kitchen, an app, or a workspace. Describe how you would approach this."
+        },
+        {
+            "id": 29,
+            "tier": 2,
+            "signal_level": "high",
+            "expected_points": {
+                "minimum": 16,
+                "target": 34,
+                "excellent": 65
+            },
+            "backup_for": 7,
+            "text": "Imagine you have to estimate how many tennis balls would fit in a school bus. Talk me through your reasoning process."
+        },
+        {
+            "id": 30,
+            "tier": 2,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 22,
+                "excellent": 44
+            },
+            "backup_for": null,
+            "text": "What is more important to you when working on something: that it is done well, or that it is done on time? What happens when you cannot have both?"
+        },
+        {
+            "id": 31,
+            "tier": 3,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 22,
+                "excellent": 42
+            },
+            "backup_for": null,
+            "text": "Looking back at decisions you have made, what helps you understand whether they were good ones?"
+        },
+        {
+            "id": 32,
+            "tier": 3,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 22,
+                "excellent": 42
+            },
+            "backup_for": null,
+            "text": "You are following a new process or set of instructions and realize you are missing something you need. What is your process for resolving this?"
+        },
+        {
+            "id": 33,
+            "tier": 3,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 24,
+                "excellent": 46
+            },
+            "backup_for": null,
+            "text": "When working with other people on something, what role do you naturally tend to fall into, and why do you think that is?"
+        },
+        {
+            "id": 34,
+            "tier": 3,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 22,
+                "excellent": 44
+            },
+            "backup_for": null,
+            "text": "When you get feedback or criticism about something you have done, what is your first reaction, and how do you process it afterward?"
+        },
+        {
+            "id": 35,
+            "tier": 3,
+            "signal_level": "standard",
+            "expected_points": {
+                "minimum": 8,
+                "target": 18,
+                "excellent": 34
+            },
+            "backup_for": null,
+            "text": "If someone asks you a question you do not know the answer to, what do you do?"
+        },
+        {
+            "id": 36,
+            "tier": 3,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 24,
+                "excellent": 46
+            },
+            "backup_for": null,
+            "text": "You are helping a friend prepare for a presentation, and they are very nervous. How do you support them?"
+        },
+        {
+            "id": 37,
+            "tier": 3,
+            "signal_level": "standard",
+            "expected_points": {
+                "minimum": 8,
+                "target": 20,
+                "excellent": 38
+            },
+            "backup_for": null,
+            "text": "Think about your relationship with rules or guidelines — when do you follow them closely, and when do you feel comfortable bending them?"
+        },
+        {
+            "id": 38,
+            "tier": 3,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 22,
+                "excellent": 44
+            },
+            "backup_for": null,
+            "text": "Describe a time when you had to balance two things that were both important but pulled you in different directions. How did you decide what to do?"
+        },
+        {
+            "id": 39,
+            "tier": 3,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 22,
+                "excellent": 44
+            },
+            "backup_for": null,
+            "text": "You notice someone around you who seems isolated or struggling. What goes through your mind, and what, if anything, do you do?"
+        },
+        {
+            "id": 40,
+            "tier": 3,
+            "signal_level": "standard",
+            "expected_points": {
+                "minimum": 8,
+                "target": 18,
+                "excellent": 36
+            },
+            "backup_for": null,
+            "text": "When you finish something — a project, task, or commitment — what do you usually think about first: what went well, what could have been better, or what comes next?"
+        },
+        {
+            "id": 41,
+            "tier": 3,
+            "signal_level": "standard",
+            "expected_points": {
+                "minimum": 8,
+                "target": 18,
+                "excellent": 34
+            },
+            "backup_for": null,
+            "text": "If you notice a pattern repeating in your daily life or work, what do you usually do with that observation?"
+        },
+        {
+            "id": 42,
+            "tier": 3,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 22,
+                "excellent": 42
+            },
+            "backup_for": null,
+            "text": "Describe a situation where you noticed something others seemed to miss. What was it, and why do you think you noticed it?"
+        },
+        {
+            "id": 43,
+            "tier": 3,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 22,
+                "excellent": 42
+            },
+            "backup_for": null,
+            "text": "What do you do when you notice you keep making the same mistake?"
+        },
+        {
+            "id": 44,
+            "tier": 3,
+            "signal_level": "medium",
+            "expected_points": {
+                "minimum": 10,
+                "target": 22,
+                "excellent": 44
+            },
+            "backup_for": null,
+            "text": "Describe a moment when you realized you were wrong about something important. What happened next?"
+        },
+        {
+            "id": 45,
+            "tier": 3,
+            "signal_level": "standard",
+            "expected_points": {
+                "minimum": 8,
+                "target": 18,
+                "excellent": 36
+            },
+            "backup_for": null,
+            "text": "When you have free time with no specific plans, what do you find yourself drawn to doing, and why?"
+        }
+    ]
+}

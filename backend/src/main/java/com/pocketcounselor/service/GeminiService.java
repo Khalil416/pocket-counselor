@@ -72,32 +72,59 @@ public class GeminiService {
 
     /**
      * Build a prompt for Gemini based on user answers
+     * STRICT RULE: No advice, no next steps, no plans, no projects - ONLY insights and descriptions
      */
     private String buildPrompt(Map<String, String> answers) {
         StringBuilder prompt = new StringBuilder();
         
-        prompt.append("You are a career counselor. Based on the following answers to a career assessment questionnaire, ");
-        prompt.append("provide career recommendations. This is NOT medical or therapy advice.\n\n");
-        prompt.append("User Answers:\n");
+        prompt.append("You are a career assessment analyzer. Based on the following answers from a career assessment questionnaire, ");
+        prompt.append("provide insights about career directions. This is NOT medical or therapy advice.\n\n");
+        prompt.append("User's Assessment Answers:\n");
         
         // Add all answers to the prompt
-        answers.forEach((questionId, answer) -> {
-            prompt.append("- ").append(questionId).append(": ").append(answer).append("\n");
+        answers.forEach((questionId, answerKey) -> {
+            prompt.append("- ").append(questionId).append(": ").append(answerKey).append("\n");
         });
         
-        prompt.append("\nPlease provide:\n");
-        prompt.append("1. Top 3 career paths that match these answers\n");
-        prompt.append("2. A brief explanation (2-3 sentences) for each career path\n");
-        prompt.append("3. 3 actionable next steps the user can take\n\n");
-        prompt.append("Format your response as JSON with this structure:\n");
+        prompt.append("\nAnalyze these answers and provide insights in JSON format.\n\n");
+        prompt.append("CRITICAL RULES - YOU MUST FOLLOW THESE:\n");
+        prompt.append("- DO NOT provide advice, recommendations, or suggestions\n");
+        prompt.append("- DO NOT include phrases like: 'you should', 'I recommend', 'try', 'next step', 'plan', 'project', 'start with'\n");
+        prompt.append("- ONLY describe what the answers reveal (insights, patterns, signals)\n");
+        prompt.append("- Use neutral, descriptive language\n");
+        prompt.append("- Focus on what IS, not what SHOULD BE\n\n");
+        
+        prompt.append("Provide ONLY:\n");
+        prompt.append("1. Top 3 career directions (broad clusters like 'Software Development', 'Design & Creative', 'Business & Management')\n");
+        prompt.append("2. For each direction:\n");
+        prompt.append("   - A clear title\n");
+        prompt.append("   - 2-4 bullet points describing why this direction aligns with their answers (descriptive, not prescriptive)\n");
+        prompt.append("   - 2-3 key signals detected from their answers\n");
+        prompt.append("3. A summary of detected signals:\n");
+        prompt.append("   - Interests: patterns in what they enjoy\n");
+        prompt.append("   - Work Style: patterns in how they prefer to work\n");
+        prompt.append("   - Values: patterns in what matters to them\n");
+        prompt.append("4. Confidence level: 'high', 'medium', or 'low' based on answer consistency\n");
+        prompt.append("5. A neutral note: 'This is guidance based on your answers.'\n\n");
+        
+        prompt.append("Format your response as JSON with this EXACT structure:\n");
         prompt.append("{\n");
-        prompt.append("  \"careers\": [\n");
-        prompt.append("    {\"title\": \"Career Name\", \"description\": \"Brief explanation\"},\n");
-        prompt.append("    ...\n");
+        prompt.append("  \"directions\": [\n");
+        prompt.append("    {\n");
+        prompt.append("      \"title\": \"Career Direction Name\",\n");
+        prompt.append("      \"why\": [\"Descriptive reason 1\", \"Descriptive reason 2\"],\n");
+        prompt.append("      \"signals\": [\"Signal 1\", \"Signal 2\"]\n");
+        prompt.append("    }\n");
         prompt.append("  ],\n");
-        prompt.append("  \"nextSteps\": [\"Step 1\", \"Step 2\", \"Step 3\"]\n");
+        prompt.append("  \"signalsSummary\": {\n");
+        prompt.append("    \"interests\": [\"Interest pattern 1\", \"Interest pattern 2\"],\n");
+        prompt.append("    \"workStyle\": [\"Work style pattern 1\", \"Work style pattern 2\"],\n");
+        prompt.append("    \"values\": [\"Value pattern 1\", \"Value pattern 2\"]\n");
+        prompt.append("  },\n");
+        prompt.append("  \"confidence\": \"high\",\n");
+        prompt.append("  \"note\": \"This is guidance based on your answers.\"\n");
         prompt.append("}\n");
-        prompt.append("Keep responses concise and practical.");
+        prompt.append("\nUse neutral, descriptive language. Describe patterns and insights, not actions or recommendations.");
         
         return prompt.toString();
     }
@@ -106,6 +133,11 @@ public class GeminiService {
      * Call the Gemini API
      */
     private String callGeminiAPI(String prompt) {
+        // Validate API key
+        if (apiKey == null || apiKey.isEmpty() || apiKey.equals("YOUR_API_KEY_HERE")) {
+            throw new RuntimeException("Gemini API key is not configured! Please set the GEMINI_API_KEY environment variable.");
+        }
+        
         // Build the request body for Gemini API
         Map<String, Object> requestBody = new HashMap<>();
         
@@ -174,29 +206,84 @@ public class GeminiService {
 
             // Build our response object
             AnalysisResponse response = new AnalysisResponse();
-            List<AnalysisResponse.Career> careers = new ArrayList<>();
-            List<String> nextSteps = new ArrayList<>();
+            List<AnalysisResponse.Direction> directions = new ArrayList<>();
 
-            // Extract careers
-            JsonNode careersNode = responseNode.path("careers");
-            if (careersNode.isArray()) {
-                for (JsonNode careerNode : careersNode) {
-                    String title = careerNode.path("title").asText();
-                    String description = careerNode.path("description").asText();
-                    careers.add(new AnalysisResponse.Career(title, description));
+            // Extract directions
+            JsonNode directionsNode = responseNode.path("directions");
+            if (directionsNode.isArray()) {
+                for (JsonNode directionNode : directionsNode) {
+                    AnalysisResponse.Direction direction = new AnalysisResponse.Direction();
+                    direction.setTitle(directionNode.path("title").asText());
+                    
+                    // Extract "why" array
+                    List<String> whyList = new ArrayList<>();
+                    JsonNode whyNode = directionNode.path("why");
+                    if (whyNode.isArray()) {
+                        for (JsonNode whyItem : whyNode) {
+                            whyList.add(whyItem.asText());
+                        }
+                    }
+                    direction.setWhy(whyList);
+                    
+                    // Extract "signals" array
+                    List<String> signalsList = new ArrayList<>();
+                    JsonNode signalsNode = directionNode.path("signals");
+                    if (signalsNode.isArray()) {
+                        for (JsonNode signalItem : signalsNode) {
+                            signalsList.add(signalItem.asText());
+                        }
+                    }
+                    direction.setSignals(signalsList);
+                    
+                    directions.add(direction);
                 }
             }
 
-            // Extract next steps
-            JsonNode nextStepsNode = responseNode.path("nextSteps");
-            if (nextStepsNode.isArray()) {
-                for (JsonNode stepNode : nextStepsNode) {
-                    nextSteps.add(stepNode.asText());
+            // Extract signals summary
+            AnalysisResponse.SignalsSummary signalsSummary = new AnalysisResponse.SignalsSummary();
+            JsonNode signalsSummaryNode = responseNode.path("signalsSummary");
+            if (!signalsSummaryNode.isMissingNode()) {
+                // Extract interests
+                List<String> interests = new ArrayList<>();
+                JsonNode interestsNode = signalsSummaryNode.path("interests");
+                if (interestsNode.isArray()) {
+                    for (JsonNode interestItem : interestsNode) {
+                        interests.add(interestItem.asText());
+                    }
                 }
+                signalsSummary.setInterests(interests);
+                
+                // Extract workStyle
+                List<String> workStyle = new ArrayList<>();
+                JsonNode workStyleNode = signalsSummaryNode.path("workStyle");
+                if (workStyleNode.isArray()) {
+                    for (JsonNode workStyleItem : workStyleNode) {
+                        workStyle.add(workStyleItem.asText());
+                    }
+                }
+                signalsSummary.setWorkStyle(workStyle);
+                
+                // Extract values
+                List<String> values = new ArrayList<>();
+                JsonNode valuesNode = signalsSummaryNode.path("values");
+                if (valuesNode.isArray()) {
+                    for (JsonNode valueItem : valuesNode) {
+                        values.add(valueItem.asText());
+                    }
+                }
+                signalsSummary.setValues(values);
             }
 
-            response.setCareers(careers);
-            response.setNextSteps(nextSteps);
+            // Extract confidence
+            String confidence = responseNode.path("confidence").asText("medium");
+
+            // Extract note
+            String note = responseNode.path("note").asText("This is guidance based on your answers.");
+
+            response.setDirections(directions);
+            response.setSignalsSummary(signalsSummary);
+            response.setConfidence(confidence);
+            response.setNote(note);
 
             return response;
 
@@ -213,26 +300,51 @@ public class GeminiService {
     private AnalysisResponse getDefaultResponse() {
         AnalysisResponse response = new AnalysisResponse();
         
-        List<AnalysisResponse.Career> careers = new ArrayList<>();
-        careers.add(new AnalysisResponse.Career(
-            "Software Developer",
-            "Build applications and solve technical problems. Great for analytical thinkers who enjoy creating solutions."
-        ));
-        careers.add(new AnalysisResponse.Career(
-            "Project Manager",
-            "Lead teams and coordinate projects. Ideal for organized individuals who enjoy collaboration."
-        ));
-        careers.add(new AnalysisResponse.Career(
-            "Designer",
-            "Create visual and user experiences. Perfect for creative minds who want to make things beautiful."
-        ));
+        List<AnalysisResponse.Direction> directions = new ArrayList<>();
         
-        response.setCareers(careers);
-        response.setNextSteps(Arrays.asList(
-            "Research each career path online",
-            "Talk to professionals in these fields",
-            "Take online courses to explore your interests"
+        // Direction 1
+        AnalysisResponse.Direction dir1 = new AnalysisResponse.Direction();
+        dir1.setTitle("Software Development");
+        dir1.setWhy(Arrays.asList(
+            "Answers indicate interest in building and problem-solving",
+            "Preference for structured work with clear outcomes",
+            "Technical orientation detected in responses"
         ));
+        dir1.setSignals(Arrays.asList("Building focus", "Problem-solving preference", "Technical interest"));
+        directions.add(dir1);
+        
+        // Direction 2
+        AnalysisResponse.Direction dir2 = new AnalysisResponse.Direction();
+        dir2.setTitle("Project Management");
+        dir2.setWhy(Arrays.asList(
+            "Answers show interest in organizing and coordinating",
+            "Team collaboration patterns detected",
+            "Value placed on clear structure and planning"
+        ));
+        dir2.setSignals(Arrays.asList("Organizational focus", "Team orientation", "Planning preference"));
+        directions.add(dir2);
+        
+        // Direction 3
+        AnalysisResponse.Direction dir3 = new AnalysisResponse.Direction();
+        dir3.setTitle("Design & Creative");
+        dir3.setWhy(Arrays.asList(
+            "Answers indicate creative expression interest",
+            "Value placed on aesthetics and user experience",
+            "Preference for varied and engaging work"
+        ));
+        dir3.setSignals(Arrays.asList("Creative expression", "Aesthetic focus", "Variety preference"));
+        directions.add(dir3);
+        
+        // Signals summary
+        AnalysisResponse.SignalsSummary signalsSummary = new AnalysisResponse.SignalsSummary();
+        signalsSummary.setInterests(Arrays.asList("Building and creating", "Problem-solving", "Organization"));
+        signalsSummary.setWorkStyle(Arrays.asList("Structured approach", "Team collaboration", "Clear outcomes"));
+        signalsSummary.setValues(Arrays.asList("Stability", "Achievement", "Support"));
+        
+        response.setDirections(directions);
+        response.setSignalsSummary(signalsSummary);
+        response.setConfidence("medium");
+        response.setNote("This is guidance based on your answers.");
         
         return response;
     }
