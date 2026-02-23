@@ -8,7 +8,7 @@ const CHECKPOINTS = [
     { level: 1, points: 280, minQuestions: 10, label: 'Basic' },
     { level: 2, points: 420, minQuestions: 15, label: 'Good' },
     { level: 3, points: 560, minQuestions: 20, label: 'Very Detailed' },
-    { level: 4, points: 700, minQuestions: 25, label: 'Maximum Depth' }
+    { level: 4, points: 700, minQuestions: 25, label: 'Maximum' }
 ];
 
 /**
