@@ -1,0 +1,15 @@
+{
+    "name": "pocket-counselor",
+    "version": "2.0.0",
+    "description": "Micro-skill profiling counselor system with AI-driven analysis",
+    "main": "backend/server.js",
+    "scripts": {
+        "start": "node backend/server.js",
+        "dev": "node backend/server.js"
+    },
+    "dependencies": {
+        "cors": "^2.8.5",
+        "express": "^4.18.2",
+        "uuid": "^9.0.0"
+    }
+}

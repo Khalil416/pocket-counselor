@@ -1,46 +1,142 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pocket Counselor - Career Path Finder</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pocket Counselor — Skill Profiling Assessment</title>
+  <meta name="description" content="Discover your unique skill profile through an AI-powered open-ended assessment.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header>
-            <h1>🎯 Pocket Counselor</h1>
-            <p class="subtitle">Discover your ideal career path</p>
-        </header>
 
-        <!-- Progress Bar -->
-        <div class="progress-container">
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
-            <p class="progress-text" id="progressText">Question 1 of 5</p>
+  <!-- ═══ Welcome Screen ═══ -->
+  <div id="welcomeScreen" class="screen active">
+    <div class="welcome-container">
+      <div class="logo-glow"></div>
+      <div class="welcome-icon">🧠</div>
+      <h1 class="welcome-title">Pocket Counselor</h1>
+      <p class="welcome-subtitle">Discover Your Unique Skill Profile</p>
+      <div class="welcome-description">
+        <p>Answer open-ended questions about how you think, work, and solve problems. Our AI analyzes your responses to
+          build a detailed skill profile.</p>
+        <div class="welcome-features">
+          <div class="feature"><span class="feature-icon">✍️</span> Open-ended questions</div>
+          <div class="feature"><span class="feature-icon">🤖</span> AI-powered analysis</div>
+          <div class="feature"><span class="feature-icon">📊</span> Detailed skill bars</div>
         </div>
-
-        <!-- Question Container -->
-        <div class="question-container" id="questionContainer">
-            <!-- Questions will be dynamically inserted here -->
-        </div>
-
-        <!-- Result Container (hidden initially) -->
-        <div class="result-container" id="resultContainer" style="display: none;">
-            <h2>Your Career Recommendations</h2>
-            <div id="resultContent"></div>
-        </div>
-
-        <!-- Loading Spinner (hidden initially) -->
-        <div class="loading" id="loading" style="display: none;">
-            <div class="spinner"></div>
-            <p>Analyzing your answers...</p>
-        </div>
+      </div>
+      <button id="startBtn" class="btn-primary btn-glow" onclick="startQuiz()">
+        Begin Assessment
+        <span class="btn-arrow">→</span>
+      </button>
+      <p class="welcome-note">Takes roughly 15–30 minutes • No right or wrong answers</p>
     </div>
+  </div>
 
-    <script src="script.js"></script>
+  <!-- ═══ Quiz Screen ═══ -->
+  <div id="quizScreen" class="screen">
+    <div class="quiz-container">
+      <div class="quiz-header">
+        <div class="quiz-counter" id="questionCounter">Question 1</div>
+      </div>
+
+      <div class="question-card" id="questionCard">
+        <p class="question-text" id="questionText"></p>
+      </div>
+
+      <div class="answer-area">
+        <textarea id="answerInput" class="answer-textarea"
+          placeholder="Share your thoughts... a few sentences work best." rows="5"></textarea>
+        <div class="char-hint" id="charHint">
+          <span id="charCount">0</span> characters
+        </div>
+      </div>
+
+      <div class="answer-warning" id="answerWarning" style="display: none;"></div>
+
+      <div class="quiz-actions">
+        <button id="skipBtn" class="btn-secondary" onclick="handleSkip()">
+          Skip this question
+        </button>
+        <button id="nextBtn" class="btn-primary" onclick="handleNext()">
+          Next →
+        </button>
+      </div>
+
+      <div class="skip-counter" id="skipCounter" style="display: none;">
+        Skips used: <span id="skipCount">0</span> / 7
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Checkpoint Modal ═══ -->
+  <div id="checkpointModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-check">✓</div>
+      <h2 class="modal-title">Checkpoint Reached</h2>
+      <div class="modal-badge" id="modalBadge">Basic Profile</div>
+      <p class="modal-info" id="modalInfo">Questions Answered: 10</p>
+      <p class="modal-description">
+        You can see your results now, or continue for more detail.
+        <br><small>Continuing adds about 5 more questions.</small>
+      </p>
+      <div class="modal-actions">
+        <button class="btn-primary" onclick="showResults()">See My Results</button>
+        <button class="btn-secondary" onclick="continueQuiz()">Continue for More</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Results Screen ═══ -->
+  <div id="resultsScreen" class="screen">
+    <div class="results-container">
+      <div class="results-header">
+        <h1 class="results-title">Your Skill Profile</h1>
+        <div class="profile-badge" id="profileBadge">Profile</div>
+      </div>
+
+      <div class="results-warning" id="resultsWarning" style="display: none;"></div>
+
+      <!-- Overall Summary -->
+      <div class="overall-summary" id="overallSummary"></div>
+
+      <!-- Skill Bars (AI-generated categories) -->
+      <div class="skill-bars" id="skillBars">
+        <!-- Dynamically generated from AI response -->
+      </div>
+
+      <!-- Strongest Areas -->
+      <div id="strengthsSection" class="results-section" style="display: none;">
+        <h3 class="section-title">💪 Strongest Areas</h3>
+        <ul class="results-list" id="strengthsList"></ul>
+      </div>
+
+      <!-- Areas with Less Signal -->
+      <div id="attentionSection" class="results-section" style="display: none;">
+        <h3 class="section-title">🌱 Areas to Explore</h3>
+        <ul class="results-list" id="attentionList"></ul>
+      </div>
+
+      <div class="results-footer">
+        <button class="btn-secondary" onclick="restartQuiz()">Start Fresh Assessment</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Loading Overlay ═══ -->
+  <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loading-spinner"></div>
+    <p class="loading-text">Preparing your assessment...</p>
+  </div>
+
+  <script src="quiz.js"></script>
+  <script src="results.js"></script>
 </body>
-</html>
 
+</html>
