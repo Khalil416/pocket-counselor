@@ -200,6 +200,27 @@ app.get('/api/session/:id/results', async (req, res) => {
   }
 });
 
+app.get('/api/session/:id/answers', (req, res) => {
+  const session = getSession(req.params.id);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+
+  const answers = session.answers.map((entry) => {
+    const question = getQuestionById(entry.questionId);
+    return {
+      questionId: entry.questionId,
+      questionText: question?.text || `Question ${entry.questionId}`,
+      answerText: entry.answerText || '',
+      responseType: entry.responseType,
+      pointsEarned: entry.pointsEarned
+    };
+  });
+
+  return res.json({
+    session: getClientSession(session),
+    answers
+  });
+});
+
 if (require.main === module) {
   app.listen(PORT, () => console.log(`Pocket Counselor server running on http://localhost:${PORT}`));
 }

@@ -43,7 +43,9 @@ function renderResults(data) {
         }
 
         // Overall summary
-        summaryEl.textContent = data.overall_summary || '';
+        const summaryText = (data.overall_summary || '').trim();
+        const isMockSummary = summaryText === 'Mock değerlendirme: cevaplarınıza göre beceri sinyalleri düzenli şekilde gözlendi.';
+        summaryEl.textContent = isMockSummary ? '' : summaryText;
 
         // ─── Categories as skill bars ─────────────────────
         if (barsContainer) barsContainer.innerHTML = '';
@@ -113,4 +115,33 @@ function renderResults(data) {
         <small>${e.message}</small>
     </div>`;
     }
+}
+
+
+function renderAnswers(data) {
+    const answersList = document.getElementById('answersList');
+    const answersCountBadge = document.getElementById('answersCountBadge');
+
+    if (!answersList || !answersCountBadge) return;
+
+    const answers = Array.isArray(data?.answers) ? data.answers : [];
+    const answeredItems = answers.filter((item) => item.answerText && item.answerText.trim().length > 0);
+
+    answersCountBadge.textContent = `${answeredItems.length} Answered`;
+    answersList.innerHTML = '';
+
+    if (answeredItems.length === 0) {
+        answersList.innerHTML = '<div class="results-warning" style="display:block;">No answers found yet.</div>';
+        return;
+    }
+
+    answeredItems.forEach((item, index) => {
+        const card = document.createElement('div');
+        card.className = 'results-section';
+        card.innerHTML = `
+            <h3 class="section-title">${index + 1}. ${item.questionText}</h3>
+            <p class="skill-bar-description">${item.answerText}</p>
+        `;
+        answersList.appendChild(card);
+    });
 }

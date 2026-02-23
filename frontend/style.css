@@ -757,6 +757,17 @@ body::before {
   border-top: 1px solid var(--border-subtle);
 }
 
+.results-footer .btn-primary,
+.results-footer .btn-secondary {
+  margin: 6px;
+}
+
+.answers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 /* ─── Loading Overlay ────────────────────────────── */
 .loading-overlay {
   position: fixed;
