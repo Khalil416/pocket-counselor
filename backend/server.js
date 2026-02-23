@@ -38,6 +38,37 @@ api.initialize({ apiKey: process.env.GEMINI_API_KEY || propsConfig.apiKey, model
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(apiTrafficLogger);
+
+
+function createPreview(value, maxLen = 400) {
+  try {
+    const raw = typeof value === 'string' ? value : JSON.stringify(value);
+    if (raw.length <= maxLen) return raw;
+    return `${raw.slice(0, maxLen)}... [truncated ${raw.length - maxLen} chars]`;
+  } catch {
+    return '[unserializable]';
+  }
+}
+
+function apiTrafficLogger(req, res, next) {
+  if (!req.path.startsWith('/api/')) return next();
+
+  const started = Date.now();
+  const reqBody = req.body && Object.keys(req.body).length ? createPreview(req.body) : '{}';
+  console.log(`[API->IN ] ${req.method} ${req.originalUrl} body=${reqBody}`);
+
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    const elapsed = Date.now() - started;
+    const payload = createPreview(body);
+    console.log(`[API<-OUT] ${req.method} ${req.originalUrl} status=${res.statusCode} ${elapsed}ms body=${payload}`);
+    return originalJson(body);
+  };
+
+  next();
+}
+
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
 app.get('/api/health', (req, res) => {

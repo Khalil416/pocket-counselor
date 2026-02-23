@@ -19,6 +19,21 @@ function isMockMode() {
   return (process.env.AI_MODE || 'mock').toLowerCase() === 'mock';
 }
 
+
+function safePreview(value, maxLen = 300) {
+  try {
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    if (text.length <= maxLen) return text;
+    return `${text.slice(0, maxLen)}... [truncated ${text.length - maxLen} chars]`;
+  } catch {
+    return '[unserializable]';
+  }
+}
+
+function traceAiTraffic(direction, payload) {
+  console.log(`[AI-${direction}] ${safePreview(payload)}`);
+}
+
 async function callGemini(promptText) {
   if (!API_KEY) throw new Error('Gemini API key not configured.');
 
@@ -34,10 +49,12 @@ async function callGemini(promptText) {
     generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
   };
 
+  traceAiTraffic('OUT', { url, model: MODEL_NAME, body });
   const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!response.ok) throw new Error(`Gemini API error ${response.status}: ${await response.text()}`);
 
   const data = await response.json();
+  traceAiTraffic('IN', data);
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('Empty response from Gemini API');
   return JSON.parse(text.trim());

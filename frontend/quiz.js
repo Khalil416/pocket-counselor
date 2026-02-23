@@ -12,6 +12,7 @@ let isProcessing = false;
 let statusPollInterval = null;
 let pendingNextQuestion = null; // holds the next question when a checkpoint is shown
 let cp1NotReachedHintShown = false;
+let forceCheckpoint15Shown = false;
 
 // DOM references
 let questionText, answerInput, charCount, charHint;
@@ -66,6 +67,9 @@ function hideLoading() {
 // ─── Start Quiz ─────────────────────────────────────
 async function startQuiz() {
     showLoading('Starting your assessment...');
+    forceCheckpoint15Shown = false;
+    cp1NotReachedHintShown = false;
+    pendingNextQuestion = null;
 
     try {
         const res = await fetch('/api/session/start', { method: 'POST' });
@@ -118,6 +122,9 @@ async function pollStatus() {
 
         // Handle checkpoint
         if (data.checkpoint_reached_now && data.checkpoint) {
+            if (forceCheckpoint15Shown && data.checkpoint.level === 1) {
+                return;
+            }
             stopStatusPolling();
             if (data.checkpoint.autoShow) {
                 showResults();
@@ -193,6 +200,7 @@ async function handleNext() {
             throw new Error(errData.error || 'Failed to submit answer');
         }
 
+        const submittedQuestionNumber = currentQuestion.questionNumber;
         const data = await res.json();
         canSkipCurrent = data.canSkip;
 
@@ -202,36 +210,24 @@ async function handleNext() {
             skipCountEl.textContent = data.session.counters.questionsSkipped;
         }
 
-        // If user has answered 15 questions and still hasn't reached CP1,
-        // explain what is missing (points and/or minimum answered).
-        // This is purely UX feedback; it does not change checkpoint logic.
-        if (
-            !cp1NotReachedHintShown &&
-            data.session &&
-            data.session.counters &&
-            data.session.points &&
-            data.session.checkpoints &&
-            data.session.counters.questionsAnswered === 15 &&
-            data.session.checkpoints.reached < 1
-        ) {
-            const CP1_POINTS = 280;
-            const CP1_MIN_ANSWERED = 10;
-            const answered = data.session.counters.questionsAnswered || 0;
-            const totalPoints = data.session.points.total || 0;
-
-            const needAnswered = Math.max(0, CP1_MIN_ANSWERED - answered);
-            const needPoints = Math.max(0, CP1_POINTS - totalPoints);
-
-            let msg = `Not ready yet. CP1 needs ${CP1_POINTS} points and ${CP1_MIN_ANSWERED} answers. You have ${totalPoints} points and ${answered} answers.`;
-            if (needAnswered > 0 || needPoints > 0) {
-                const parts = [];
-                if (needPoints > 0) parts.push(`${needPoints} more points`);
-                if (needAnswered > 0) parts.push(`${needAnswered} more answers`);
-                msg += ` Missing: ${parts.join(' and ')}.`;
-            }
-
-            showToast(msg, 'warning');
+        if (submittedQuestionNumber === 15 && data.nextQuestion) {
+            forceCheckpoint15Shown = true;
             cp1NotReachedHintShown = true;
+            pendingNextQuestion = data.nextQuestion;
+            stopStatusPolling();
+
+            showCheckpointModal({
+                level: 1,
+                label: 'Check My Points',
+                questionsAnswered: data.session?.counters?.questionsAnswered ?? 15,
+                totalPoints: data.session?.points?.total ?? 0,
+                autoShow: false
+            });
+
+            isProcessing = false;
+            nextBtn.disabled = false;
+            skipBtn.disabled = false;
+            return;
         }
 
         // Handle Finish (no more questions)
@@ -381,6 +377,9 @@ async function showResults() {
 function restartQuiz() {
     sessionId = null;
     currentQuestion = null;
+    forceCheckpoint15Shown = false;
+    cp1NotReachedHintShown = false;
+    pendingNextQuestion = null;
     stopStatusPolling();
     showScreen('welcomeScreen');
 }
