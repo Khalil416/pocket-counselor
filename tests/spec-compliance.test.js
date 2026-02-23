@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { app } = require('../backend/server');
-const { getSession } = require('../backend/session');
+const { getSession, validateScoringResponse } = require('../backend/session');
+const { validateResultsResponse } = require('../backend/api');
 
 process.env.AI_MODE = 'mock';
 
@@ -148,4 +149,32 @@ test('8) 35 question limit forces results mode', async () => {
     if (!q) break;
   }
   assert.equal(last.body.finished, true);
+});
+
+
+test('9) scoring schema enforces fibonacci, skill ids, uniqueness, and totals', async () => {
+  assert.equal(validateScoringResponse({ response_type: 'valid', total_points: 8, skills_detected: [{ skill_id: 'empathy', points: 5 }, { skill_id: 'planning', points: 3 }] }), true);
+  assert.equal(validateScoringResponse({ response_type: 'valid', total_points: 4, skills_detected: [{ skill_id: 'empathy', points: 5 }] }), false);
+  assert.equal(validateScoringResponse({ response_type: 'valid', total_points: 10, skills_detected: [{ skill_id: 'empathy', points: 5 }, { skill_id: 'empathy', points: 5 }] }), false);
+  assert.equal(validateScoringResponse({ response_type: 'valid', total_points: 4, skills_detected: [{ skill_id: 'INVALID', points: 3 }, { skill_id: 'planning', points: 1 }] }), false);
+  assert.equal(validateScoringResponse({ response_type: 'valid', total_points: 4, skills_detected: [{ skill_id: 'planning', points: 4 }] }), false);
+  assert.equal(validateScoringResponse({ response_type: 'invalid', total_points: 1, skills_detected: [{ skill_id: 'planning', points: 1 }] }), false);
+});
+
+test('10) results schema enforces profile quality, category labels, and integer scores', async () => {
+  const validPayload = {
+    profile_quality: 'Very Detailed',
+    overall_summary: 'Genel profil güçlü ve dengeli görünüyor.',
+    categories: [
+      { name: 'İletişim Yetkinliği', score: 78, label: 'Strong', explanation: 'İletişim sinyalleri net biçimde gözleniyor.' },
+      { name: 'Planlama Disiplini', score: 51, label: 'Good', explanation: 'Planlama tarafında istikrarlı göstergeler var.' }
+    ],
+    strongest_areas: [{ skill_name: 'Empati', reason: 'Cevaplarınıza göre bu beceri sıkça gözlendi.' }],
+    growth_areas: [{ skill_name: 'Sayısal Muhakeme', reason: 'Bu alanda daha fazla örnek fırsatı oluşabilir.' }]
+  };
+  assert.equal(validateResultsResponse(validPayload), true);
+  assert.equal(validateResultsResponse({ ...validPayload, profile_quality: 'Maximum Depth' }), false);
+  assert.equal(validateResultsResponse({ ...validPayload, categories: [{ name: 'X', score: 55, label: 'Developing', explanation: 'x' }] }), false);
+  assert.equal(validateResultsResponse({ ...validPayload, categories: [{ name: 'X', score: 101, label: 'Strong', explanation: 'x' }] }), false);
+  assert.equal(validateResultsResponse({ ...validPayload, categories: [{ name: 'X', score: 55.5, label: 'Strong', explanation: 'x' }] }), false);
 });

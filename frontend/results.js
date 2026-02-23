@@ -44,8 +44,7 @@ function renderResults(data) {
 
         // Overall summary
         const summaryText = (data.overall_summary || '').trim();
-        const isMockSummary = summaryText === 'Mock değerlendirme: cevaplarınıza göre beceri sinyalleri düzenli şekilde gözlendi.';
-        summaryEl.textContent = isMockSummary ? '' : summaryText;
+        summaryEl.textContent = summaryText;
 
         // ─── Categories as skill bars ─────────────────────
         if (barsContainer) barsContainer.innerHTML = '';
