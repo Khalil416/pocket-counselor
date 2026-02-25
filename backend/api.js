@@ -6,9 +6,8 @@ const resultsPromptPath = path.join(__dirname, '..', 'prompts', 'results.txt');
 const RESULT_PROFILE_QUALITY = new Set(['Basic', 'Good', 'Very Detailed', 'Maximum']);
 const RESULT_CATEGORY_LABELS = new Set(['Weak', 'Basic', 'Good', 'Strong', 'Exceptional']);
 
-const OPENAI_API_BASE = 'https://api.openai.com/v1';
 let API_KEY = '';
-let MODEL_NAME = 'gpt-4.1-mini';
+let MODEL_NAME = 'gemini-2.5-flash';
 
 function initialize(config = {}) {
   API_KEY = config.apiKey || '';
@@ -52,48 +51,62 @@ function traceAiTraffic(direction, payload) {
   console.log(`[AI-${direction}] ${safePreview(payload)}`);
 }
 
-async function callOpenAI(promptText) {
-  if (!API_KEY) throw new Error('OpenAI API key not configured.');
+async function callGemini(promptText) {
+  if (!API_KEY) {
+    const error = new Error('Gemini API key not configured.');
+    error.code = 'AI_KEY_MISSING';
+    throw error;
+  }
 
-  const systemMatch = promptText.match(/^SYSTEM:\s*([\s\S]*?)(?=\nUSER:|$)/);
-  const userMatch = promptText.match(/USER:[\s\S]*$/);
-  const systemText = systemMatch ? systemMatch[1].trim() : '';
-  const userText = userMatch ? userMatch[0].replace(/^USER:\s*/, '').trim() : promptText;
-
-  const url = `${OPENAI_API_BASE}/chat/completions`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent`;
   const body = {
-    model: MODEL_NAME,
-    response_format: { type: 'json_object' },
-    temperature: 0.2,
-    messages: [
-      { role: 'system', content: systemText || 'Return valid JSON only.' },
-      { role: 'user', content: userText }
-    ]
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: promptText }]
+      }
+    ],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: 'application/json'
+    }
   };
 
-  console.log('[AI] OpenAI request started');
-  traceAiTraffic('OUT', { url, model: MODEL_NAME, messagesCount: body.messages.length });
+  console.log('[AI] AI provider: gemini');
+  console.log('[AI] Calling Gemini generateContent');
+  traceAiTraffic('OUT', { url, model: MODEL_NAME, contentsCount: body.contents.length });
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${API_KEY}`
+      'x-goog-api-key': API_KEY
     },
     body: JSON.stringify(body)
   });
 
   if (!response.ok) {
     const raw = await response.text();
-    console.error('[AI] OpenAI request failed', { status: response.status, body: safePreview(raw, 800) });
-    throw new Error(`OpenAI API error ${response.status}: ${raw}`);
+    console.error('[AI] Gemini request failed', { status: response.status, body: safePreview(raw, 800) });
+    throw new Error(`Gemini API error ${response.status}: ${raw}`);
   }
 
   const data = await response.json();
-  console.log('[AI] OpenAI request succeeded');
+  console.log('[AI] Gemini response received');
   traceAiTraffic('IN', data);
-  const text = data?.choices?.[0]?.message?.content;
-  if (!text) throw new Error('Empty response from OpenAI API');
-  return JSON.parse(text.trim());
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    const error = new Error('Empty response from Gemini API');
+    error.code = 'AI_SCHEMA_ERROR';
+    throw error;
+  }
+
+  try {
+    return JSON.parse(text.trim());
+  } catch {
+    const error = new Error('AI schema error');
+    error.code = 'AI_SCHEMA_ERROR';
+    throw error;
+  }
 }
 
 function buildMockScoring(answerText) {
@@ -160,31 +173,48 @@ function validateResultsResponse(aiResponse) {
 
 async function callScoringPrompt(questionText, answerText, expectedPoints) {
   if (isMockMode()) return buildMockScoring(answerText);
-  console.log('[AI] AI_MODE=real -> calling OpenAI scoring');
+  console.log('[AI] AI_MODE=real -> calling Gemini scoring');
 
-  let prompt = readPromptFile(scoringPromptPath);
-  prompt = prompt.replace('{question_text}', questionText);
-  prompt = prompt.replace('{min}', String(expectedPoints.minimum));
-  prompt = prompt.replace('{target}', String(expectedPoints.target));
-  prompt = prompt.replace('{excellent}', String(expectedPoints.excellent));
-  prompt = prompt.replace('{answer_text}', answerText);
-  return callOpenAI(prompt);
+  const systemPrompt = readPromptFile(scoringPromptPath);
+  const userMessage = [
+    `QUESTION: ${questionText}`,
+    `EXPECTED POINTS: minimum ${expectedPoints.minimum} / target ${expectedPoints.target} / excellent ${expectedPoints.excellent}`,
+    'USER ANSWER:',
+    answerText
+  ].join('\n');
+
+  try {
+    return await callGemini(`${systemPrompt}\n\n${userMessage}`);
+  } catch (error) {
+    if (error.code === 'AI_SCHEMA_ERROR') {
+      return { response_type: 'schema_invalid', total_points: 0, skills_detected: [] };
+    }
+    throw error;
+  }
 }
 
 async function callResultsPrompt(session) {
   if (isMockMode()) return buildMockResults(session);
-  console.log('[AI] AI_MODE=real -> calling OpenAI results');
+  console.log('[AI] AI_MODE=real -> calling Gemini results');
 
   const scoresObj = { ...session.microSkillScores };
-  let prompt = readPromptFile(resultsPromptPath);
-  prompt = prompt.replace('{questions_answered}', String(session.counters.questionsAnswered));
-  prompt = prompt.replace('{questions_skipped}', String(session.counters.questionsSkipped));
-  prompt = prompt.replace('{invalid_answers}', String(session.counters.invalidAnswers));
-  prompt = prompt.replace('{total_points}', String(session.points.total));
-  prompt = prompt.replace('{checkpoint_number}', String(session.checkpoints.reached));
-  prompt = prompt.replace('{micro_skill_scores}', JSON.stringify(scoresObj, null, 2));
-  const aiResponse = await callOpenAI(prompt);
-  if (!validateResultsResponse(aiResponse)) throw new Error('AI schema error');
+  const systemPrompt = readPromptFile(resultsPromptPath);
+  const userMessage = [
+    `QUESTIONS ANSWERED: ${session.counters.questionsAnswered}`,
+    `QUESTIONS SKIPPED: ${session.counters.questionsSkipped}`,
+    `INVALID ANSWERS: ${session.counters.invalidAnswers}`,
+    `TOTAL POINTS: ${session.points.total}`,
+    `CHECKPOINT REACHED: ${session.checkpoints.reached}`,
+    'MICRO-SKILL SCORES:',
+    JSON.stringify(scoresObj, null, 2)
+  ].join('\n');
+
+  const aiResponse = await callGemini(`${systemPrompt}\n\n${userMessage}`);
+  if (!validateResultsResponse(aiResponse)) {
+    const error = new Error('AI schema error');
+    error.code = 'AI_SCHEMA_ERROR';
+    throw error;
+  }
   return aiResponse;
 }
 
@@ -192,6 +222,7 @@ function getRuntimeStatus() {
   const mode = isMockMode() ? 'mock' : 'real';
   return {
     mode,
+    provider: 'gemini',
     keyLoaded: Boolean(API_KEY),
     model: MODEL_NAME,
     promptFilesOk: fs.existsSync(scoringPromptPath) && fs.existsSync(resultsPromptPath)

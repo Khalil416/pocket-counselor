@@ -109,7 +109,7 @@ function validateScoringResponse(aiResponse) {
 function applyAiScoring(session, questionData, answerText, aiResponse) {
   if (!validateScoringResponse(aiResponse)) {
     console.error('AI schema error');
-    session.answers.push({ questionId: questionData.id, answerText, status: 'ai_invalid_schema', responseType: 'invalid_schema', pointsEarned: 0 });
+    session.answers.push({ questionId: questionData.id, answerText, status: 'schema_invalid', responseType: 'invalid_schema', pointsEarned: 0 });
     return false;
   }
 
