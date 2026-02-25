@@ -83,16 +83,33 @@ app.post('/api/session/start', (req, res) => {
 
 app.post('/api/session/:id/answer', async (req, res) => {
   const session = getSession(req.params.id);
-  if (!session) return res.status(404).json({ error: 'Session not found' });
+  if (!session) {
+    return res.status(404).json({ error: 'session_not_found', message: 'Session not found' });
+  }
 
-  const { questionId, answer } = req.body;
-  if (!questionId || typeof answer !== 'string') return res.status(400).json({ error: 'questionId and answer are required' });
-  if (answer.trim().length < 10) return res.status(400).json({ error: 'answer_too_short' });
+  const { questionId, answer, answerText } = req.body || {};
+  const normalizedAnswer = typeof answer === 'string' ? answer : answerText;
+
+  if (!questionId || typeof normalizedAnswer !== 'string') {
+    return res.status(400).json({
+      error: 'invalid_answer_payload',
+      message: 'questionId and answer text are required'
+    });
+  }
+
+  if (normalizedAnswer.trim().length < 10) {
+    return res.status(400).json({
+      error: 'answer_too_short',
+      message: 'Please share a bit more — at least 10 characters.'
+    });
+  }
 
   const questionData = getQuestionById(questionId);
-  if (!questionData) return res.status(400).json({ error: 'Invalid question ID' });
+  if (!questionData) {
+    return res.status(400).json({ error: 'invalid_question_id', message: 'Invalid question ID' });
+  }
 
-  void fireScoring(session, questionData, answer.trim());
+  void fireScoring(session, questionData, normalizedAnswer.trim());
 
   const nextQuestion = getNextQuestion(session);
   const forceFinishAt35 = session.counters.questionsShown >= 35;
