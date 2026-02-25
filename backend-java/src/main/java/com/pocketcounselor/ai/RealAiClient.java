@@ -9,6 +9,7 @@ import okhttp3.*;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -18,32 +19,71 @@ public class RealAiClient implements AiClient {
     private final ObjectMapper mapper = new ObjectMapper();
 
     private String callResponses(String systemPrompt, String userInput) {
-        String apiKey = System.getenv("OPENAI_API_KEY");
-        if (apiKey == null || apiKey.isBlank()) throw new IllegalStateException("OPENAI_API_KEY missing");
+        String apiKey = firstNonBlank(
+                System.getenv("GEMINI_API_KEY"),
+                System.getenv("GOOGLE_API_KEY")
+        );
+        if (apiKey == null) {
+            throw new IllegalStateException("Gemini API key missing: set GEMINI_API_KEY or GOOGLE_API_KEY");
+        }
+
+        String model = firstNonBlank(System.getenv("GEMINI_MODEL"), "gemini-2.0-flash");
         try {
             Map<String, Object> payload = Map.of(
-                    "model", "gpt-4.1-mini",
-                    "temperature", 0,
-                    "input", List.of(
-                            Map.of("role", "system", "content", systemPrompt),
-                            Map.of("role", "user", "content", userInput)
+                    "system_instruction", Map.of(
+                            "parts", List.of(Map.of("text", systemPrompt))
                     ),
-                    "text", Map.of("format", Map.of("type", "json_object"))
+                    "contents", List.of(
+                            Map.of(
+                                    "role", "user",
+                                    "parts", List.of(Map.of("text", userInput))
+                            )
+                    ),
+                    "generationConfig", Map.of(
+                            "temperature", 0,
+                            "responseMimeType", "application/json"
+                    )
             );
+
+            HttpUrl url = HttpUrl.parse("https://generativelanguage.googleapis.com/v1beta/models/"
+                    + model + ":generateContent");
+            if (url == null) throw new IllegalStateException("Invalid Gemini URL");
+            url = url.newBuilder().addQueryParameter("key", apiKey).build();
+
             Request req = new Request.Builder()
-                    .url("https://api.openai.com/v1/responses")
-                    .header("Authorization", "Bearer " + apiKey)
+                    .url(url)
                     .header("Content-Type", "application/json")
                     .post(RequestBody.create(mapper.writeValueAsBytes(payload), MediaType.parse("application/json")))
                     .build();
+
             try (Response resp = client.newCall(req).execute()) {
-                if (!resp.isSuccessful()) throw new RuntimeException("OpenAI error " + resp.code());
-                JsonNode root = mapper.readTree(resp.body().bytes());
-                return root.path("output").get(0).path("content").get(0).path("text").asText();
+                String body = resp.body() != null ? new String(resp.body().bytes(), StandardCharsets.UTF_8) : "";
+                if (!resp.isSuccessful()) {
+                    throw new RuntimeException("Gemini error " + resp.code() + ": " + body);
+                }
+                JsonNode root = mapper.readTree(body);
+                JsonNode textNode = root.path("candidates")
+                        .path(0)
+                        .path("content")
+                        .path("parts")
+                        .path(0)
+                        .path("text");
+
+                if (textNode.isMissingNode() || textNode.asText().isBlank()) {
+                    throw new RuntimeException("Gemini response missing candidates[0].content.parts[0].text");
+                }
+                return textNode.asText();
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) return value;
+        }
+        return null;
     }
 
     @Override

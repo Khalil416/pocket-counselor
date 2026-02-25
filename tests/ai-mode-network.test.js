@@ -84,6 +84,37 @@ test('real mode performs outbound Gemini call for scoring when key is configured
   assert.equal(capturedRequest.options.headers['x-goog-api-key'], 'gm-test-123456');
 });
 
+test('defaults to real mode when AI_MODE is not set', async () => {
+  delete process.env.AI_MODE;
+  api.initialize({ apiKey: 'gm-test-123456', model: 'gemini-2.5-flash' });
+
+  let fetchCalled = false;
+  global.fetch = async () => {
+    fetchCalled = true;
+    return {
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: JSON.stringify({ response_type: 'valid', total_points: 8, skills_detected: [] }) }]
+            }
+          }
+        ]
+      })
+    };
+  };
+
+  const result = await api.callScoringPrompt('Question?', 'This should use real mode by default.', {
+    minimum: 10,
+    target: 20,
+    excellent: 30
+  });
+
+  assert.equal(fetchCalled, true);
+  assert.equal(result.response_type, 'valid');
+});
+
 test('scoring handles invalid JSON from Gemini safely as schema_invalid', async () => {
   process.env.AI_MODE = 'real';
   api.initialize({ apiKey: 'gm-test-123456', model: 'gemini-2.5-flash' });

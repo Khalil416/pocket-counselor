@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
 public class AiConfig {
     @Bean
     public AiClient aiClient(MockAiClient mockAiClient, RealAiClient realAiClient) {
-        String mode = System.getenv().getOrDefault("AI_MODE", "mock").toLowerCase();
+        String mode = System.getenv().getOrDefault("AI_MODE", "real").toLowerCase();
         return "real".equals(mode) ? realAiClient : mockAiClient;
     }
 }
