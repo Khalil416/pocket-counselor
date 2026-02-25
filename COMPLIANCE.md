@@ -1,23 +1,16 @@
-# SPEC Compliance Map
+# SPEC Compliance Map (Java backend)
 
-## SPEC maddesi → kod karşılığı
-
-- Session modeli + memory store: `backend/session.js` (`createSession`, `buildEmptyScores`).
-- Min cevap uzunluğu 10: `backend/server.js` (`POST /api/session/:id/answer`).
-- Skip max 7 ve AI çağrısız skip: `backend/server.js` (`POST /skip`) + `backend/session.js` (`canSkip`, `skipQuestion`).
-- Asenkron scoring (fire-and-forget): `backend/server.js` (`void fireScoring(...)`).
-- AI failure retry 1 kez + `ai_failed`: `backend/server.js` (`fireScoring`) + `backend/session.js` (`markAiFailure`).
-- Checkpoint sadece answered%3==0: `backend/checkpoint.js` (`checkForCheckpoint`).
-- Checkpoint polling endpoint: `GET /api/session/:id/state`.
-- 35 soru limiti: `backend/server.js` (`questionsShown >= 35`).
-- PROMPT A/B dosyadan okuma: `backend/api.js` (`SCORING_PROMPT`, `RESULTS_PROMPT`).
-- Scoring schema validation + fibonacci + allowed skill ids: `backend/session.js` (`validateScoringResponse`).
-- Results tek çağrı/cache: `backend/server.js` (`_resultsRequested`, `_resultsCache`).
-- AI JSON aynen render (frontend): `frontend/results.js` (`renderResults`).
-
-## “Kod aptal kabuk, AI beyin” garantileri
-
-- Kod kategori hesaplamaz; sadece AI `categories` dizisini render eder.
-- Kod skill kalite/etiket üretmez; scoring sonucu doğrudan session’a yansıtılır.
-- Kod prompt içerikleri hardcode etmez; yalnızca `prompts/*.txt` okur.
-- Kod AI JSON’unu “düzeltmez”; invalid şema durumunda güvenli şekilde yok sayar.
+- Session in-memory store: `backend-java/src/main/java/com/pocketcounselor/store/SessionStore.java` (`ConcurrentHashMap`).
+- Session shape + counters + 77 skills + `INVALID`: `backend-java/src/main/java/com/pocketcounselor/model/Session.java`, `backend-java/src/main/java/com/pocketcounselor/service/SessionService.java`.
+- Prompt files loaded from disk: `DataRepository.readPrompt("scoring.txt"|"results.txt")`.
+- Async scoring (next question returned immediately): `SessionService.scoreAsync(...)` (background `CompletableFuture`).
+- Skip max=7, no AI scoring for skip: `SessionController.skip`, `SessionService.skip`.
+- Min answer length 10 and no advance on short text: `SessionController.answer`.
+- AI retry once then `ai_failed`: `SessionService.doScore`.
+- Schema validation strict (fibonacci points, allowed skill IDs, totals): `AiValidationService.validScoring`.
+- Invalid schema => `schema_invalid` + no points/answered increment: `SessionService.doScore`.
+- Invalid response_type handling => `invalidAnswers++`, `questionsAnswered++`, `microSkillScores.INVALID++`: `SessionService.doScore`.
+- Checkpoint gating and thresholds (`answered % 3 == 0`): `SessionService.checkCheckpoint`.
+- No checkpoint replay (`next = reached + 1`): `SessionService.checkCheckpoint`.
+- 35 shown-question limit + low-data warning path: `SessionController.answer/skip`, `SessionService.results`.
+- Results endpoint returns AI payload with warning flag, does not fabricate categories/summaries: `SessionController.results`, `AiValidationService.validResults`.
