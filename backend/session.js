@@ -87,17 +87,26 @@ function validateScoringResponse(aiResponse) {
   if (!Number.isInteger(aiResponse.total_points)) return false;
   if (!Array.isArray(aiResponse.skills_detected)) return false;
 
+  const seenSkillIds = new Set();
+  let computedTotal = 0;
   for (const s of aiResponse.skills_detected) {
     if (!s || typeof s !== 'object') return false;
+    if (seenSkillIds.has(s.skill_id)) return false;
+    seenSkillIds.add(s.skill_id);
     if (!ALLOWED_SKILL_IDS.has(s.skill_id)) return false;
     if (!Number.isInteger(s.points) || !FIBONACCI_POINTS.has(s.points)) return false;
+    computedTotal += s.points;
   }
+
+  if (aiResponse.total_points !== computedTotal) return false;
+  if ((aiResponse.response_type === 'invalid' || aiResponse.response_type === 'skipped') && (aiResponse.total_points !== 0 || aiResponse.skills_detected.length !== 0)) return false;
+
   return true;
 }
 
 function applyAiScoring(session, questionData, answerText, aiResponse) {
   if (!validateScoringResponse(aiResponse)) {
-    console.error('[AI] Invalid scoring schema received; ignoring answer scoring.');
+    console.error('AI schema error');
     session.answers.push({ questionId: questionData.id, answerText, status: 'ai_invalid_schema', responseType: 'invalid_schema', pointsEarned: 0 });
     return false;
   }
