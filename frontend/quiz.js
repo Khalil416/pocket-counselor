@@ -14,6 +14,7 @@ let pendingNextQuestion = null; // holds the next question when a checkpoint is 
 let cp1NotReachedHintShown = false;
 let forceCheckpoint15Shown = false;
 let submittedAnswersCount = 0;
+let resultsCheckpointScheduled = false;
 
 // DOM references
 let questionText, answerInput, charCount, charHint;
@@ -76,6 +77,7 @@ async function startQuiz() {
     cp1NotReachedHintShown = false;
     pendingNextQuestion = null;
     submittedAnswersCount = 0;
+    resultsCheckpointScheduled = false;
 
     try {
         const res = await fetch('/api/session/start', { method: 'POST' });
@@ -143,6 +145,57 @@ async function pollStatus() {
     }
 }
 
+async function waitUntilResultsReady(maxAttempts = 30, intervalMs = 200) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        const res = await fetch(`/api/session/${sessionId}/state`);
+        if (!res.ok) {
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+            continue;
+        }
+
+        const state = await res.json();
+        if (state?.scoring?.results_ready) {
+            return state;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    return null;
+}
+
+async function maybeShowResultsReadyCheckpoint(data) {
+    if (resultsCheckpointScheduled || submittedAnswersCount < 15) return;
+    resultsCheckpointScheduled = true;
+
+    try {
+        const readyState = await waitUntilResultsReady();
+        if (!readyState) {
+            console.warn('Results-ready checkpoint was not reached in time', {
+                submittedAnswersCount,
+                sessionId
+            });
+            return;
+        }
+
+        forceCheckpoint15Shown = true;
+        cp1NotReachedHintShown = true;
+        stopStatusPolling();
+
+        setTimeout(() => {
+            showCheckpointModal({
+                level: 0,
+                label: 'Results are ready',
+                questionsAnswered: readyState.session?.counters?.questionsAnswered ?? 15,
+                totalPoints: readyState.session?.points?.total ?? data.session?.points?.total ?? 0,
+                autoShow: false
+            });
+        }, 500);
+    } catch (error) {
+        console.error('Failed to auto-show results checkpoint', error);
+    }
+}
+
 // ─── Render Question ────────────────────────────────
 function renderQuestion() {
     if (!currentQuestion) return;
@@ -190,7 +243,7 @@ async function handleNext() {
         const res = await fetch(`/api/session/${sessionId}/answer`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ questionId: currentQuestion.id, answer })
+            body: JSON.stringify({ questionId: currentQuestion.id, answerText: answer })
         });
 
         if (!res.ok) {
@@ -203,10 +256,15 @@ async function handleNext() {
                 skipBtn.disabled = false;
                 return;
             }
+            console.error('Submit answer failed', {
+                status: res.status,
+                endpoint: `/api/session/${sessionId}/answer`,
+                payload: { questionId: currentQuestion.id, answerText: answer },
+                response: errData
+            });
             throw new Error(errData.error || 'Failed to submit answer');
         }
 
-        const submittedQuestionNumber = currentQuestion.questionNumber;
         submittedAnswersCount += 1;
         const data = await res.json();
         canSkipCurrent = data.canSkip;
@@ -215,26 +273,6 @@ async function handleNext() {
         if (data.session && data.session.counters.questionsSkipped > 0) {
             skipCounter.style.display = 'block';
             skipCountEl.textContent = data.session.counters.questionsSkipped;
-        }
-
-        if (submittedQuestionNumber === 15 && data.nextQuestion) {
-            forceCheckpoint15Shown = true;
-            cp1NotReachedHintShown = true;
-            pendingNextQuestion = data.nextQuestion;
-            stopStatusPolling();
-
-            showCheckpointModal({
-                level: 1,
-                label: 'Check My Points',
-                questionsAnswered: Math.max(data.session?.counters?.questionsAnswered ?? 0, submittedAnswersCount, 15),
-                totalPoints: data.session?.points?.total ?? 0,
-                autoShow: false
-            });
-
-            isProcessing = false;
-            nextBtn.disabled = false;
-            skipBtn.disabled = false;
-            return;
         }
 
         // Handle Finish (no more questions)
@@ -248,6 +286,7 @@ async function handleNext() {
         // Show next question immediately (non-blocking scoring)
         currentQuestion = data.nextQuestion;
         renderQuestion();
+        void maybeShowResultsReadyCheckpoint(data);
 
     } catch (error) {
         console.error('Error submitting answer:', error);
@@ -345,10 +384,18 @@ async function showResults() {
     showLoading('Generating your skill profile...');
 
     try {
-        const res = await fetch(`/api/session/${sessionId}/results`);
-        if (!res.ok) throw new Error('Failed to get results');
+        const endpoint = `/api/session/${sessionId}/results`;
+        const res = await fetch(endpoint);
+        const data = await res.json().catch(() => ({}));
 
-        const data = await res.json();
+        if (!res.ok) {
+            console.error('Results request failed', {
+                status: res.status,
+                endpoint,
+                response: data
+            });
+            throw new Error(data?.error?.code || 'Failed to get results');
+        }
 
         // Hide loading first so it doesn't block the view
         hideLoading();
@@ -416,6 +463,7 @@ function restartQuiz() {
     cp1NotReachedHintShown = false;
     pendingNextQuestion = null;
     submittedAnswersCount = 0;
+    resultsCheckpointScheduled = false;
     stopStatusPolling();
     showScreen('welcomeScreen');
 }

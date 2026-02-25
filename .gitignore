@@ -117,3 +117,16 @@ spring.log
 application-*.properties
 !application.properties.example
 
+
+.next/
+dist/
+
+# Binary / data artifacts
+.env.local
+*.png
+*.jpg
+*.jpeg
+*.ico
+*.sqlite
+*.zip
+*.pdf
