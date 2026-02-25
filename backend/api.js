@@ -15,7 +15,7 @@ function initialize(config = {}) {
 }
 
 function isMockMode() {
-  return (process.env.AI_MODE || 'mock').toLowerCase() === 'mock';
+  return (process.env.AI_MODE || 'real').toLowerCase() === 'mock';
 }
 
 function readPromptFile(promptPath) {
