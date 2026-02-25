@@ -120,3 +120,45 @@ test('results before 15th scoring completion returns retryable 409 JSON error', 
     api.callScoringPrompt = originalCallScoringPrompt;
   }
 });
+
+
+test('ai status endpoint reports gemini provider metadata', async () => {
+  const status = await jfetch('/api/ai/status');
+  assert.equal(status.status, 200);
+  assert.equal(status.body.provider, 'gemini');
+  assert.ok(['mock', 'real'].includes(status.body.mode));
+  assert.equal(typeof status.body.keyLoaded, 'boolean');
+  assert.equal(typeof status.body.model, 'string');
+});
+
+test('results endpoint returns 502 for AI schema errors', async () => {
+  const originalCallResultsPrompt = api.callResultsPrompt;
+  api.callResultsPrompt = async () => {
+    const err = new Error('AI schema error');
+    err.code = 'AI_SCHEMA_ERROR';
+    throw err;
+  };
+
+  try {
+    const start = await jfetch('/api/session/start', { method: 'POST' });
+    const sessionId = start.body.sessionId;
+    let nextQuestion = start.body.question;
+
+    for (let i = 0; i < 15; i += 1) {
+      const answer = await submitAnswer(sessionId, nextQuestion.id, `Answer ${i + 1} with enough detail for scoring.`);
+      assert.equal(answer.status, 200);
+      nextQuestion = answer.body.nextQuestion;
+    }
+
+    await waitForCondition(async () => {
+      const state = await jfetch(`/api/session/${sessionId}/state`);
+      return state.body?.scoring?.results_ready ? state.body : null;
+    });
+
+    const results = await jfetch(`/api/session/${sessionId}/results`);
+    assert.equal(results.status, 502);
+    assert.equal(results.body.error.code, 'AI_SCHEMA_ERROR');
+  } finally {
+    api.callResultsPrompt = originalCallResultsPrompt;
+  }
+});

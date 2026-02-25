@@ -30,18 +30,26 @@ function loadApiKeyFromProperties() {
     path.join(__dirname, 'src', 'main', 'resources', 'application.properties')
   ];
 
-  const keyPattern = /^\s*(openai\.apiKey|openai\.api\.key|openai\.api_key|gemini\.api\.key)\s*=\s*(.+)\s*$/im;
-  const modelPattern = /^\s*(openai\.model|gemini\.model)\s*=\s*(.+)\s*$/im;
-
   for (const propsPath of propsCandidates) {
     if (!fs.existsSync(propsPath)) continue;
     try {
       const content = fs.readFileSync(propsPath, 'utf-8');
-      const keyMatch = content.match(keyPattern);
-      const modelMatch = content.match(modelPattern);
+      const props = {};
+      for (const rawLine of content.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith('#')) continue;
+        const idx = line.indexOf('=');
+        if (idx === -1) continue;
+        const key = line.slice(0, idx).trim();
+        const value = line.slice(idx + 1).trim();
+        props[key] = value;
+      }
+
       return {
-        apiKey: keyMatch ? keyMatch[2].trim() : '',
-        model: modelMatch ? modelMatch[2].trim() : 'gpt-4.1-mini',
+        geminiApiKey: props['gemini.apiKey'] || props['gemini.api.key'] || '',
+        apiKey: props['apiKey'] || props['api.key'] || '',
+        geminiModel: props['gemini.model'] || '',
+        model: props.model || '',
         source: propsPath
       };
     } catch (error) {
@@ -49,7 +57,7 @@ function loadApiKeyFromProperties() {
     }
   }
 
-  return { apiKey: '', model: 'gpt-4.1-mini', source: null };
+  return { geminiApiKey: '', apiKey: '', geminiModel: '', model: '', source: null };
 }
 
 function maskSecret(secret) {
@@ -59,13 +67,15 @@ function maskSecret(secret) {
 }
 
 const propsConfig = loadApiKeyFromProperties();
-const resolvedApiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY || propsConfig.apiKey;
-const resolvedModel = process.env.OPENAI_MODEL || process.env.GEMINI_MODEL || propsConfig.model;
+const resolvedApiKey = propsConfig.geminiApiKey || propsConfig.apiKey || process.env.GEMINI_API_KEY;
+const resolvedModel = propsConfig.geminiModel || propsConfig.model || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 api.initialize({ apiKey: resolvedApiKey, model: resolvedModel });
 
 const startupMode = (process.env.AI_MODE || 'mock').toLowerCase();
 console.log(`[AI-CONFIG] AI_MODE=${startupMode}`);
-console.log(`[AI-CONFIG] API key source=${process.env.OPENAI_API_KEY ? 'env:OPENAI_API_KEY' : (process.env.GEMINI_API_KEY ? 'env:GEMINI_API_KEY' : (propsConfig.source || 'none'))} key=${maskSecret(resolvedApiKey)} model=${resolvedModel}`);
+const apiKeySource = propsConfig.geminiApiKey ? `${propsConfig.source}:gemini.apiKey` : (propsConfig.apiKey ? `${propsConfig.source}:apiKey` : (process.env.GEMINI_API_KEY ? 'env:GEMINI_API_KEY' : 'none'));
+const modelSource = propsConfig.geminiModel ? `${propsConfig.source}:gemini.model` : (propsConfig.model ? `${propsConfig.source}:model` : (process.env.GEMINI_MODEL ? 'env:GEMINI_MODEL' : 'default'));
+console.log(`[AI-CONFIG] provider=gemini API key source=${apiKeySource} key=${maskSecret(resolvedApiKey)} model=${resolvedModel} modelSource=${modelSource}`);
 
 const app = express();
 app.use(cors());
@@ -111,8 +121,8 @@ app.get('/api/ai/status', (req, res) => {
   const status = api.getRuntimeStatus();
   res.json({
     mode: status.mode,
+    provider: status.provider,
     keyLoaded: status.keyLoaded,
-    promptFilesOk: status.promptFilesOk,
     model: status.model
   });
 });
@@ -287,6 +297,15 @@ async function handleSessionResults(req, res) {
   } catch (error) {
     console.error('Results generation failed:', error.message);
     const errorCode = error.code || (error.message === 'AI schema error' ? 'AI_SCHEMA_ERROR' : 'RESULTS_GENERATION_FAILED');
+    if (errorCode === 'AI_SCHEMA_ERROR') {
+      return res.status(502).json({
+        error: {
+          code: 'AI_SCHEMA_ERROR',
+          message: 'Results generation failed.'
+        }
+      });
+    }
+
     return res.status(500).json({
       error: {
         code: errorCode,
