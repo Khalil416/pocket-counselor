@@ -124,6 +124,23 @@
       </div>
 
       <div class="results-footer">
+        <button class="btn-primary" onclick="showAnswersScreen()">Continue</button>
+        <button class="btn-secondary" onclick="restartQuiz()">Start Fresh Assessment</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Answers Screen ═══ -->
+  <div id="answersScreen" class="screen">
+    <div class="results-container">
+      <div class="results-header">
+        <h1 class="results-title">Your Answers</h1>
+        <div class="profile-badge" id="answersCountBadge">0 Answered</div>
+      </div>
+
+      <div id="answersList" class="answers-list"></div>
+
+      <div class="results-footer">
         <button class="btn-secondary" onclick="restartQuiz()">Start Fresh Assessment</button>
       </div>
     </div>

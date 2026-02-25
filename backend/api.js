@@ -3,8 +3,8 @@ const path = require('path');
 
 const scoringPromptPath = path.join(__dirname, '..', 'prompts', 'scoring.txt');
 const resultsPromptPath = path.join(__dirname, '..', 'prompts', 'results.txt');
-const SCORING_PROMPT = fs.readFileSync(scoringPromptPath, 'utf-8');
-const RESULTS_PROMPT = fs.readFileSync(resultsPromptPath, 'utf-8');
+const RESULT_PROFILE_QUALITY = new Set(['Basic', 'Good', 'Very Detailed', 'Maximum']);
+const RESULT_CATEGORY_LABELS = new Set(['Weak', 'Basic', 'Good', 'Strong', 'Exceptional']);
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 let API_KEY = '';
@@ -17,6 +17,25 @@ function initialize(config = {}) {
 
 function isMockMode() {
   return (process.env.AI_MODE || 'mock').toLowerCase() === 'mock';
+}
+
+function readPromptFile(promptPath) {
+  return fs.readFileSync(promptPath, 'utf-8');
+}
+
+
+function safePreview(value, maxLen = 300) {
+  try {
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    if (text.length <= maxLen) return text;
+    return `${text.slice(0, maxLen)}... [truncated ${text.length - maxLen} chars]`;
+  } catch {
+    return '[unserializable]';
+  }
+}
+
+function traceAiTraffic(direction, payload) {
+  console.log(`[AI-${direction}] ${safePreview(payload)}`);
 }
 
 async function callGemini(promptText) {
@@ -34,10 +53,12 @@ async function callGemini(promptText) {
     generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
   };
 
+  traceAiTraffic('OUT', { url, model: MODEL_NAME, body });
   const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!response.ok) throw new Error(`Gemini API error ${response.status}: ${await response.text()}`);
 
   const data = await response.json();
+  traceAiTraffic('IN', data);
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('Empty response from Gemini API');
   return JSON.parse(text.trim());
@@ -64,20 +85,51 @@ function buildMockScoring(answerText) {
 function buildMockResults(session) {
   return {
     profile_quality: session.checkpoints.reached >= 2 ? 'Good' : 'Basic',
-    overall_summary: 'Mock değerlendirme: cevaplarınıza göre beceri sinyalleri düzenli şekilde gözlendi.',
+    overall_summary: 'Yanıtlarınıza göre iletişim ve planlama odaklı bir profil gözleniyor. Cevaplarınızda yapılandırılmış düşünme ve insan odaklı yaklaşım birlikte öne çıkıyor. Bazı alanlarda daha fazla örnek verildiğinde profiliniz daha da netleşebilir.',
     categories: [
-      { name: 'İletişim ve İnsan Becerileri', score: 68, label: 'Good', explanation: 'Yanıtlarda empati ve dinleme davranışları tekrarlandı.' },
-      { name: 'Planlama ve Öz Yönetim', score: 61, label: 'Good', explanation: 'Cevaplarda planlı ve önceliklendirilmiş yaklaşım görüldü.' }
+      { name: 'İletişim ve İnsan Becerileri', score: 71, label: 'Strong', explanation: 'Yanıtlarınızda empati ve aktif dinleme davranışları düzenli biçimde gözleniyor. Özellikle karşı tarafı anlama ve uygun cevap üretme yaklaşımınız dikkat çekiyor.' },
+      { name: 'Planlama ve Öz Yönetim', score: 63, label: 'Good', explanation: 'Cevaplarınıza göre planlama ve önceliklendirme tarafında tutarlı sinyaller var. Görevleri adımlara bölme yaklaşımınız düzenli bir çalışma tarzına işaret ediyor.' },
+      { name: 'Uyum ve Öğrenme Yaklaşımı', score: 48, label: 'Good', explanation: 'Farklı durumlara uyum sağlama yönünde temel düzeyde olumlu göstergeler gözleniyor. Daha fazla somut örnekle bu alanın gücü daha net görülebilir.' },
+      { name: 'Analitik Derinlik', score: 34, label: 'Basic', explanation: 'Analitik muhakeme sinyalleri bazı yanıtlarda görülse de daha sınırlı kalmış görünüyor. Veri veya neden-sonuç temelli örneklerin artması bu kategoriyi güçlendirebilir.' }
     ],
-    strongest_areas: [{ skill_name: 'Empati', reason: 'Birden çok yanıtta başkasının perspektifini ele aldınız.' }],
-    growth_areas: [{ skill_name: 'Sayısal Muhakeme', reason: 'Veri/sayı temelli örnekler daha az görünür kaldı.' }]
+    strongest_areas: [
+      { skill_name: 'Empati', reason: 'Cevaplarınıza göre farklı bakış açılarını dikkate alma davranışı düzenli olarak gözleniyor.' },
+      { skill_name: 'Planlama', reason: 'Gözlenen örneklerde işleri adım adım yapılandırma yaklaşımınız belirgin şekilde öne çıkıyor.' },
+      { skill_name: 'Aktif Dinleme', reason: 'Yanıtlarınıza göre karşı tarafın ihtiyacını anlayıp buna uygun tepki üretme eğilimi güçlü görünüyor.' }
+    ],
+    growth_areas: [
+      { skill_name: 'Sayısal Muhakeme', reason: 'Bu alana dair sinyaller cevaplarınıza göre daha az görünmüş durumda. Sayısal gerekçeli örnekler fırsat buldukça profili destekleyebilir.' },
+      { skill_name: 'Deneysel Yaklaşım', reason: 'Farklı yöntemleri test etmeye dair örnekler sınırlı gözleniyor. Küçük denemeler ve iterasyon anlatıları bu alanı görünür kılabilir.' },
+      { skill_name: 'Müzakere', reason: 'Karşılıklı uzlaşma süreçlerine dair örnekler cevaplarınıza göre daha az yer bulmuş. Somut müzakere senaryoları bu beceriyi daha iyi yansıtabilir.' }
+    ]
   };
+}
+
+function validateResultsResponse(aiResponse) {
+  if (!aiResponse || typeof aiResponse !== 'object' || Array.isArray(aiResponse)) return false;
+  if (!RESULT_PROFILE_QUALITY.has(aiResponse.profile_quality)) return false;
+  if (typeof aiResponse.overall_summary !== 'string') return false;
+  if (!Array.isArray(aiResponse.categories) || !Array.isArray(aiResponse.strongest_areas) || !Array.isArray(aiResponse.growth_areas)) return false;
+
+  for (const category of aiResponse.categories) {
+    if (!category || typeof category !== 'object' || Array.isArray(category)) return false;
+    if (typeof category.name !== 'string' || typeof category.explanation !== 'string') return false;
+    if (!Number.isInteger(category.score) || category.score < 0 || category.score > 100) return false;
+    if (!RESULT_CATEGORY_LABELS.has(category.label)) return false;
+  }
+
+  for (const area of [...aiResponse.strongest_areas, ...aiResponse.growth_areas]) {
+    if (!area || typeof area !== 'object' || Array.isArray(area)) return false;
+    if (typeof area.skill_name !== 'string' || typeof area.reason !== 'string') return false;
+  }
+
+  return true;
 }
 
 async function callScoringPrompt(questionText, answerText, expectedPoints) {
   if (isMockMode()) return buildMockScoring(answerText);
 
-  let prompt = SCORING_PROMPT;
+  let prompt = readPromptFile(scoringPromptPath);
   prompt = prompt.replace('{question_text}', questionText);
   prompt = prompt.replace('{min}', String(expectedPoints.minimum));
   prompt = prompt.replace('{target}', String(expectedPoints.target));
@@ -90,16 +142,16 @@ async function callResultsPrompt(session) {
   if (isMockMode()) return buildMockResults(session);
 
   const scoresObj = { ...session.microSkillScores };
-  delete scoresObj.INVALID;
-
-  let prompt = RESULTS_PROMPT;
+  let prompt = readPromptFile(resultsPromptPath);
   prompt = prompt.replace('{questions_answered}', String(session.counters.questionsAnswered));
   prompt = prompt.replace('{questions_skipped}', String(session.counters.questionsSkipped));
   prompt = prompt.replace('{invalid_answers}', String(session.counters.invalidAnswers));
   prompt = prompt.replace('{total_points}', String(session.points.total));
   prompt = prompt.replace('{checkpoint_number}', String(session.checkpoints.reached));
   prompt = prompt.replace('{micro_skill_scores}', JSON.stringify(scoresObj, null, 2));
-  return callGemini(prompt);
+  const aiResponse = await callGemini(prompt);
+  if (!validateResultsResponse(aiResponse)) throw new Error('AI schema error');
+  return aiResponse;
 }
 
-module.exports = { initialize, callScoringPrompt, callResultsPrompt, isMockMode };
+module.exports = { initialize, callScoringPrompt, callResultsPrompt, isMockMode, validateResultsResponse };
