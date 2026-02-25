@@ -15,6 +15,12 @@ let cp1NotReachedHintShown = false;
 let forceCheckpoint15Shown = false;
 let submittedAnswersCount = 0;
 let resultsCheckpointScheduled = false;
+const apiClient = new window.PocketCounselorApiClient({
+    timeoutMs: 5000,
+    maxAttempts: 4,
+    maxTotalWaitMs: 10000,
+    maxAnswerChars: 4000
+});
 
 // DOM references
 let questionText, answerInput, charCount, charHint;
@@ -80,10 +86,7 @@ async function startQuiz() {
     resultsCheckpointScheduled = false;
 
     try {
-        const res = await fetch('/api/session/start', { method: 'POST' });
-        if (!res.ok) throw new Error('Failed to start session');
-
-        const data = await res.json();
+        const data = await apiClient.startSession();
         sessionId = data.sessionId;
         currentQuestion = data.question;
         canSkipCurrent = data.canSkip;
@@ -118,10 +121,7 @@ async function pollStatus() {
     if (!sessionId) return;
 
     try {
-        const res = await fetch(`/api/session/${sessionId}/state`);
-        if (!res.ok) return;
-
-        const data = await res.json();
+        const data = await apiClient.getSessionState(sessionId);
 
         // Show warning if any
         if (data.warning) {
@@ -145,23 +145,16 @@ async function pollStatus() {
     }
 }
 
-async function waitUntilResultsReady(maxAttempts = 30, intervalMs = 200) {
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const res = await fetch(`/api/session/${sessionId}/state`);
-        if (!res.ok) {
-            await new Promise((resolve) => setTimeout(resolve, intervalMs));
-            continue;
-        }
-
-        const state = await res.json();
-        if (state?.scoring?.results_ready) {
-            return state;
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+async function waitUntilResultsReady(maxDurationMs = 6000, intervalMs = 300) {
+    try {
+        const state = await apiClient.waitForCheckpointOrResults(sessionId, {
+            minIntervalMs: intervalMs,
+            maxDurationMs
+        });
+        return state?.scoring?.results_ready ? state : null;
+    } catch (error) {
+        return null;
     }
-
-    return null;
 }
 
 async function maybeShowResultsReadyCheckpoint(data) {
@@ -240,33 +233,12 @@ async function handleNext() {
     skipBtn.disabled = true;
 
     try {
-        const res = await fetch(`/api/session/${sessionId}/answer`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ questionId: currentQuestion.id, answerText: answer })
+        const data = await apiClient.submitAnswer(sessionId, {
+            questionId: currentQuestion.id,
+            answerText: answer
         });
 
-        if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            if (errData.error === 'answer_too_short') {
-                answerWarning.textContent = errData.message;
-                answerWarning.style.display = 'block';
-                isProcessing = false;
-                nextBtn.disabled = false;
-                skipBtn.disabled = false;
-                return;
-            }
-            console.error('Submit answer failed', {
-                status: res.status,
-                endpoint: `/api/session/${sessionId}/answer`,
-                payload: { questionId: currentQuestion.id, answerText: answer },
-                response: errData
-            });
-            throw new Error(errData.error || 'Failed to submit answer');
-        }
-
         submittedAnswersCount += 1;
-        const data = await res.json();
         canSkipCurrent = data.canSkip;
 
         // Update skip counter display
@@ -289,6 +261,15 @@ async function handleNext() {
         void maybeShowResultsReadyCheckpoint(data);
 
     } catch (error) {
+        if (error?.details?.responseBody?.error === 'answer_too_short') {
+            const errData = error.details.responseBody;
+            answerWarning.textContent = errData.message;
+            answerWarning.style.display = 'block';
+            isProcessing = false;
+            nextBtn.disabled = false;
+            skipBtn.disabled = false;
+            return;
+        }
         console.error('Error submitting answer:', error);
         isProcessing = false;
         nextBtn.disabled = false;
