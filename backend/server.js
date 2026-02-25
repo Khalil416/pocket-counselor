@@ -49,6 +49,7 @@ function loadApiKeyFromProperties() {
         geminiApiKey: props['gemini.apiKey'] || props['gemini.api.key'] || '',
         apiKey: props['apiKey'] || props['api.key'] || '',
         geminiModel: props['gemini.model'] || '',
+        aiMode: props['ai.mode'] || props['AI_MODE'] || '',
         model: props.model || '',
         source: propsPath
       };
@@ -57,7 +58,7 @@ function loadApiKeyFromProperties() {
     }
   }
 
-  return { geminiApiKey: '', apiKey: '', geminiModel: '', model: '', source: null };
+  return { geminiApiKey: '', apiKey: '', geminiModel: '', aiMode: '', model: '', source: null };
 }
 
 function maskSecret(secret) {
@@ -67,12 +68,13 @@ function maskSecret(secret) {
 }
 
 const propsConfig = loadApiKeyFromProperties();
+const resolvedAiMode = (process.env.AI_MODE || propsConfig.aiMode || 'real').toLowerCase();
+process.env.AI_MODE = resolvedAiMode;
 const resolvedApiKey = propsConfig.geminiApiKey || propsConfig.apiKey || process.env.GEMINI_API_KEY;
 const resolvedModel = propsConfig.geminiModel || propsConfig.model || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 api.initialize({ apiKey: resolvedApiKey, model: resolvedModel });
 
-const startupMode = (process.env.AI_MODE || 'mock').toLowerCase();
-console.log(`[AI-CONFIG] AI_MODE=${startupMode}`);
+console.log(`[AI-CONFIG] AI_MODE=${resolvedAiMode}`);
 const apiKeySource = propsConfig.geminiApiKey ? `${propsConfig.source}:gemini.apiKey` : (propsConfig.apiKey ? `${propsConfig.source}:apiKey` : (process.env.GEMINI_API_KEY ? 'env:GEMINI_API_KEY' : 'none'));
 const modelSource = propsConfig.geminiModel ? `${propsConfig.source}:gemini.model` : (propsConfig.model ? `${propsConfig.source}:model` : (process.env.GEMINI_MODEL ? 'env:GEMINI_MODEL' : 'default'));
 console.log(`[AI-CONFIG] provider=gemini API key source=${apiKeySource} key=${maskSecret(resolvedApiKey)} model=${resolvedModel} modelSource=${modelSource}`);
@@ -114,7 +116,7 @@ function apiTrafficLogger(req, res, next) {
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', ai_mode: process.env.AI_MODE || 'mock' });
+  res.json({ status: 'ok', ai_mode: process.env.AI_MODE || 'real' });
 });
 
 app.get('/api/ai/status', (req, res) => {

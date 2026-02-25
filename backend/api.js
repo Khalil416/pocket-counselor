@@ -15,7 +15,7 @@ function initialize(config = {}) {
 }
 
 function isMockMode() {
-  return (process.env.AI_MODE || 'mock').toLowerCase() === 'mock';
+  return (process.env.AI_MODE || 'real').toLowerCase() === 'mock';
 }
 
 function readPromptFile(promptPath) {
@@ -51,6 +51,38 @@ function traceAiTraffic(direction, payload) {
   console.log(`[AI-${direction}] ${safePreview(payload)}`);
 }
 
+function parseJsonFromText(rawText) {
+  const text = String(rawText || '').trim();
+  if (!text) {
+    const error = new Error('Empty response from Gemini API');
+    error.code = 'AI_SCHEMA_ERROR';
+    throw error;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {}
+
+  const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch && fencedMatch[1]) {
+    try {
+      return JSON.parse(fencedMatch[1].trim());
+    } catch {}
+  }
+
+  const objectStart = text.indexOf('{');
+  const objectEnd = text.lastIndexOf('}');
+  if (objectStart !== -1 && objectEnd > objectStart) {
+    try {
+      return JSON.parse(text.slice(objectStart, objectEnd + 1));
+    } catch {}
+  }
+
+  const error = new Error('AI schema error');
+  error.code = 'AI_SCHEMA_ERROR';
+  throw error;
+}
+
 async function callGemini(promptText) {
   if (!API_KEY) {
     const error = new Error('Gemini API key not configured.');
@@ -75,14 +107,31 @@ async function callGemini(promptText) {
   console.log('[AI] AI provider: gemini');
   console.log('[AI] Calling Gemini generateContent');
   traceAiTraffic('OUT', { url, model: MODEL_NAME, contentsCount: body.contents.length });
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': API_KEY
-    },
-    body: JSON.stringify(body)
-  });
+  const timeoutMs = Number(process.env.GEMINI_TIMEOUT_MS || 20000);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 20000);
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': API_KEY
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error && error.name === 'AbortError') {
+      const timeoutError = new Error(`Gemini request timed out after ${timeoutMs}ms`);
+      timeoutError.code = 'AI_TIMEOUT';
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     const raw = await response.text();
@@ -100,13 +149,7 @@ async function callGemini(promptText) {
     throw error;
   }
 
-  try {
-    return JSON.parse(text.trim());
-  } catch {
-    const error = new Error('AI schema error');
-    error.code = 'AI_SCHEMA_ERROR';
-    throw error;
-  }
+  return parseJsonFromText(text);
 }
 
 function buildMockScoring(answerText) {
