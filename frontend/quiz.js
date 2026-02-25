@@ -203,6 +203,12 @@ async function handleNext() {
                 skipBtn.disabled = false;
                 return;
             }
+            console.error('Submit answer failed', {
+                status: res.status,
+                endpoint: `/api/session/${sessionId}/answer`,
+                payload: { questionId: currentQuestion.id, answerText: answer },
+                response: errData
+            });
             throw new Error(errData.error || 'Failed to submit answer');
         }
 
