@@ -24,19 +24,48 @@ const api = require('./api');
 const PORT = process.env.PORT || 8080;
 
 function loadApiKeyFromProperties() {
-  try {
-    const propsPath = path.join(__dirname, 'src', 'main', 'resources', 'application.properties');
-    const content = fs.readFileSync(propsPath, 'utf-8');
-    const match = content.match(/gemini\.api\.key=(.+)/);
-    const modelMatch = content.match(/gemini\.model=(.+)/);
-    return { apiKey: match ? match[1].trim() : '', model: modelMatch ? modelMatch[1].trim() : 'gemini-2.5-flash' };
-  } catch {
-    return { apiKey: '', model: 'gemini-2.5-flash' };
+  const propsCandidates = [
+    path.join(process.cwd(), 'application.properties'),
+    path.join(process.cwd(), 'backend', 'src', 'main', 'resources', 'application.properties'),
+    path.join(__dirname, 'src', 'main', 'resources', 'application.properties')
+  ];
+
+  const keyPattern = /^\s*(openai\.apiKey|openai\.api\.key|openai\.api_key|gemini\.api\.key)\s*=\s*(.+)\s*$/im;
+  const modelPattern = /^\s*(openai\.model|gemini\.model)\s*=\s*(.+)\s*$/im;
+
+  for (const propsPath of propsCandidates) {
+    if (!fs.existsSync(propsPath)) continue;
+    try {
+      const content = fs.readFileSync(propsPath, 'utf-8');
+      const keyMatch = content.match(keyPattern);
+      const modelMatch = content.match(modelPattern);
+      return {
+        apiKey: keyMatch ? keyMatch[2].trim() : '',
+        model: modelMatch ? modelMatch[2].trim() : 'gpt-4.1-mini',
+        source: propsPath
+      };
+    } catch (error) {
+      console.error('[AI-CONFIG] Failed to read properties file', { propsPath, error: error.message });
+    }
   }
+
+  return { apiKey: '', model: 'gpt-4.1-mini', source: null };
+}
+
+function maskSecret(secret) {
+  if (!secret) return '[missing]';
+  const tail = secret.slice(-4);
+  return `***${tail}`;
 }
 
 const propsConfig = loadApiKeyFromProperties();
-api.initialize({ apiKey: process.env.GEMINI_API_KEY || propsConfig.apiKey, model: process.env.GEMINI_MODEL || propsConfig.model });
+const resolvedApiKey = process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY || propsConfig.apiKey;
+const resolvedModel = process.env.OPENAI_MODEL || process.env.GEMINI_MODEL || propsConfig.model;
+api.initialize({ apiKey: resolvedApiKey, model: resolvedModel });
+
+const startupMode = (process.env.AI_MODE || 'mock').toLowerCase();
+console.log(`[AI-CONFIG] AI_MODE=${startupMode}`);
+console.log(`[AI-CONFIG] API key source=${process.env.OPENAI_API_KEY ? 'env:OPENAI_API_KEY' : (process.env.GEMINI_API_KEY ? 'env:GEMINI_API_KEY' : (propsConfig.source || 'none'))} key=${maskSecret(resolvedApiKey)} model=${resolvedModel}`);
 
 const app = express();
 app.use(cors());
@@ -76,6 +105,16 @@ app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', ai_mode: process.env.AI_MODE || 'mock' });
+});
+
+app.get('/api/ai/status', (req, res) => {
+  const status = api.getRuntimeStatus();
+  res.json({
+    mode: status.mode,
+    keyLoaded: status.keyLoaded,
+    promptFilesOk: status.promptFilesOk,
+    model: status.model
+  });
 });
 
 app.post('/api/session/start', (req, res) => {

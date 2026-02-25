@@ -6,13 +6,13 @@ const resultsPromptPath = path.join(__dirname, '..', 'prompts', 'results.txt');
 const RESULT_PROFILE_QUALITY = new Set(['Basic', 'Good', 'Very Detailed', 'Maximum']);
 const RESULT_CATEGORY_LABELS = new Set(['Weak', 'Basic', 'Good', 'Strong', 'Exceptional']);
 
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const OPENAI_API_BASE = 'https://api.openai.com/v1';
 let API_KEY = '';
-let MODEL_NAME = 'gemini-2.5-flash';
+let MODEL_NAME = 'gpt-4.1-mini';
 
 function initialize(config = {}) {
-  if (config.apiKey) API_KEY = config.apiKey;
-  if (config.model) MODEL_NAME = config.model;
+  API_KEY = config.apiKey || '';
+  MODEL_NAME = config.model || MODEL_NAME;
 }
 
 function isMockMode() {
@@ -27,6 +27,7 @@ function readPromptFile(promptPath) {
 
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) {
+      console.log(`[AI-CONFIG] Loaded prompt file: ${candidate}`);
       return fs.readFileSync(candidate, 'utf-8');
     }
   }
@@ -51,29 +52,47 @@ function traceAiTraffic(direction, payload) {
   console.log(`[AI-${direction}] ${safePreview(payload)}`);
 }
 
-async function callGemini(promptText) {
-  if (!API_KEY) throw new Error('Gemini API key not configured.');
+async function callOpenAI(promptText) {
+  if (!API_KEY) throw new Error('OpenAI API key not configured.');
 
   const systemMatch = promptText.match(/^SYSTEM:\s*([\s\S]*?)(?=\nUSER:|$)/);
   const userMatch = promptText.match(/USER:[\s\S]*$/);
   const systemText = systemMatch ? systemMatch[1].trim() : '';
   const userText = userMatch ? userMatch[0].replace(/^USER:\s*/, '').trim() : promptText;
 
-  const url = `${GEMINI_API_BASE}/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
+  const url = `${OPENAI_API_BASE}/chat/completions`;
   const body = {
-    system_instruction: { parts: [{ text: systemText }] },
-    contents: [{ role: 'user', parts: [{ text: userText }] }],
-    generationConfig: { temperature: 0.2, responseMimeType: 'application/json' }
+    model: MODEL_NAME,
+    response_format: { type: 'json_object' },
+    temperature: 0.2,
+    messages: [
+      { role: 'system', content: systemText || 'Return valid JSON only.' },
+      { role: 'user', content: userText }
+    ]
   };
 
-  traceAiTraffic('OUT', { url, model: MODEL_NAME, body });
-  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (!response.ok) throw new Error(`Gemini API error ${response.status}: ${await response.text()}`);
+  console.log('[AI] OpenAI request started');
+  traceAiTraffic('OUT', { url, model: MODEL_NAME, messagesCount: body.messages.length });
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${API_KEY}`
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const raw = await response.text();
+    console.error('[AI] OpenAI request failed', { status: response.status, body: safePreview(raw, 800) });
+    throw new Error(`OpenAI API error ${response.status}: ${raw}`);
+  }
 
   const data = await response.json();
+  console.log('[AI] OpenAI request succeeded');
   traceAiTraffic('IN', data);
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Empty response from Gemini API');
+  const text = data?.choices?.[0]?.message?.content;
+  if (!text) throw new Error('Empty response from OpenAI API');
   return JSON.parse(text.trim());
 }
 
@@ -141,6 +160,7 @@ function validateResultsResponse(aiResponse) {
 
 async function callScoringPrompt(questionText, answerText, expectedPoints) {
   if (isMockMode()) return buildMockScoring(answerText);
+  console.log('[AI] AI_MODE=real -> calling OpenAI scoring');
 
   let prompt = readPromptFile(scoringPromptPath);
   prompt = prompt.replace('{question_text}', questionText);
@@ -148,11 +168,12 @@ async function callScoringPrompt(questionText, answerText, expectedPoints) {
   prompt = prompt.replace('{target}', String(expectedPoints.target));
   prompt = prompt.replace('{excellent}', String(expectedPoints.excellent));
   prompt = prompt.replace('{answer_text}', answerText);
-  return callGemini(prompt);
+  return callOpenAI(prompt);
 }
 
 async function callResultsPrompt(session) {
   if (isMockMode()) return buildMockResults(session);
+  console.log('[AI] AI_MODE=real -> calling OpenAI results');
 
   const scoresObj = { ...session.microSkillScores };
   let prompt = readPromptFile(resultsPromptPath);
@@ -162,9 +183,19 @@ async function callResultsPrompt(session) {
   prompt = prompt.replace('{total_points}', String(session.points.total));
   prompt = prompt.replace('{checkpoint_number}', String(session.checkpoints.reached));
   prompt = prompt.replace('{micro_skill_scores}', JSON.stringify(scoresObj, null, 2));
-  const aiResponse = await callGemini(prompt);
+  const aiResponse = await callOpenAI(prompt);
   if (!validateResultsResponse(aiResponse)) throw new Error('AI schema error');
   return aiResponse;
 }
 
-module.exports = { initialize, callScoringPrompt, callResultsPrompt, isMockMode, validateResultsResponse };
+function getRuntimeStatus() {
+  const mode = isMockMode() ? 'mock' : 'real';
+  return {
+    mode,
+    keyLoaded: Boolean(API_KEY),
+    model: MODEL_NAME,
+    promptFilesOk: fs.existsSync(scoringPromptPath) && fs.existsSync(resultsPromptPath)
+  };
+}
+
+module.exports = { initialize, callScoringPrompt, callResultsPrompt, isMockMode, validateResultsResponse, getRuntimeStatus };
