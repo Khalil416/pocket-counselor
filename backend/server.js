@@ -297,15 +297,21 @@ async function handleSessionResults(req, res) {
 
     return res.json(aiResults);
   } catch (error) {
-    console.error('Results generation failed:', error.message);
+    console.error('Results generation failed:', {
+      code: error.code || null,
+      details: error.details || null,
+      message: error.message
+    });
     const errorCode = error.code || (error.message === 'AI schema error' ? 'AI_SCHEMA_ERROR' : 'RESULTS_GENERATION_FAILED');
     if (errorCode === 'AI_SCHEMA_ERROR') {
-      return res.status(502).json({
+      const payload = {
         error: {
           code: 'AI_SCHEMA_ERROR',
           message: 'Results generation failed.'
         }
-      });
+      };
+      if (error.details) payload.details = String(error.details);
+      return res.status(502).json(payload);
     }
 
     return res.status(500).json({

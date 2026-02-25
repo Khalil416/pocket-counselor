@@ -370,12 +370,26 @@ async function showResults() {
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
+            const errorCode = data?.error?.code || 'RESULTS_REQUEST_FAILED';
             console.error('Results request failed', {
                 status: res.status,
                 endpoint,
+                errorCode,
+                details: data?.details || null,
                 response: data
             });
-            throw new Error(data?.error?.code || 'Failed to get results');
+
+            if (errorCode === 'RESULTS_NOT_READY') {
+                showToast('Sonuçlar hazırlanıyor. Lütfen kısa bir süre sonra tekrar deneyin.', 'warning');
+                return;
+            }
+
+            if (errorCode === 'AI_SCHEMA_ERROR') {
+                showToast('Sonuçlar oluşturulurken geçici bir sorun oluştu. Lütfen tekrar deneyin.', 'warning');
+                return;
+            }
+
+            throw new Error(errorCode);
         }
 
         // Hide loading first so it doesn't block the view

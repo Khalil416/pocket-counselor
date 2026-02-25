@@ -5,6 +5,7 @@ const scoringPromptPath = path.join(__dirname, '..', 'prompts', 'scoring.txt');
 const resultsPromptPath = path.join(__dirname, '..', 'prompts', 'results.txt');
 const RESULT_PROFILE_QUALITY = new Set(['Basic', 'Good', 'Very Detailed', 'Maximum']);
 const RESULT_CATEGORY_LABELS = new Set(['Weak', 'Basic', 'Good', 'Strong', 'Exceptional']);
+const DEBUG_LOGS_ENABLED = process.env.NODE_ENV !== 'production';
 
 let API_KEY = '';
 let MODEL_NAME = 'gemini-2.5-flash';
@@ -48,6 +49,7 @@ function safePreview(value, maxLen = 300) {
 }
 
 function traceAiTraffic(direction, payload) {
+  if (!DEBUG_LOGS_ENABLED) return;
   console.log(`[AI-${direction}] ${safePreview(payload)}`);
 }
 
@@ -61,26 +63,18 @@ function parseJsonFromText(rawText) {
 
   try {
     return JSON.parse(text);
-  } catch {}
-
-  const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (fencedMatch && fencedMatch[1]) {
-    try {
-      return JSON.parse(fencedMatch[1].trim());
-    } catch {}
+  } catch (cause) {
+    const error = new Error('AI schema error');
+    error.code = 'AI_SCHEMA_ERROR';
+    error.details = 'INVALID_JSON';
+    error.cause = cause;
+    throw error;
   }
+}
 
-  const objectStart = text.indexOf('{');
-  const objectEnd = text.lastIndexOf('}');
-  if (objectStart !== -1 && objectEnd > objectStart) {
-    try {
-      return JSON.parse(text.slice(objectStart, objectEnd + 1));
-    } catch {}
-  }
-
-  const error = new Error('AI schema error');
-  error.code = 'AI_SCHEMA_ERROR';
-  throw error;
+function shouldEnableForceTokens() {
+  const mode = (process.env.AI_MODE || 'real').toLowerCase();
+  return process.env.NODE_ENV === 'test' || mode === 'mock' || process.env.ENABLE_TEST_TOKENS === 'true';
 }
 
 async function callGemini(promptText) {
@@ -104,7 +98,7 @@ async function callGemini(promptText) {
     }
   };
 
-  console.log('[AI] AI provider: gemini');
+  console.log('[AI] Request started', { provider: 'gemini', model: MODEL_NAME });
   console.log('[AI] Calling Gemini generateContent');
   traceAiTraffic('OUT', { url, model: MODEL_NAME, contentsCount: body.contents.length });
   const timeoutMs = Number(process.env.GEMINI_TIMEOUT_MS || 20000);
@@ -154,8 +148,8 @@ async function callGemini(promptText) {
 
 function buildMockScoring(answerText) {
   const trimmed = answerText.trim().toLowerCase();
-  if (trimmed.includes('[force_ai_fail]')) throw new Error('forced-failure');
-  if (trimmed.includes('[force_invalid_schema]')) return { foo: 'bar' };
+  if (shouldEnableForceTokens() && trimmed.includes('[force_ai_fail]')) throw new Error('forced-failure');
+  if (shouldEnableForceTokens() && trimmed.includes('[force_invalid_schema]')) return { foo: 'bar' };
   if (trimmed.includes('[force_invalid]')) return { response_type: 'invalid', total_points: 0, skills_detected: [] };
   if (trimmed.includes('[force_high]')) return {
     response_type: 'valid',
@@ -194,24 +188,27 @@ function buildMockResults(session) {
 }
 
 function validateResultsResponse(aiResponse) {
-  if (!aiResponse || typeof aiResponse !== 'object' || Array.isArray(aiResponse)) return false;
-  if (!RESULT_PROFILE_QUALITY.has(aiResponse.profile_quality)) return false;
-  if (typeof aiResponse.overall_summary !== 'string') return false;
-  if (!Array.isArray(aiResponse.categories) || !Array.isArray(aiResponse.strongest_areas) || !Array.isArray(aiResponse.growth_areas)) return false;
+  if (!aiResponse || typeof aiResponse !== 'object' || Array.isArray(aiResponse)) return { valid: false, reason: 'INVALID_RESULTS_OBJECT' };
+  if ('needs_attention' in aiResponse) return { valid: false, reason: 'UNSUPPORTED_FIELD_NEEDS_ATTENTION' };
+  if (!RESULT_PROFILE_QUALITY.has(aiResponse.profile_quality)) return { valid: false, reason: 'INVALID_PROFILE_QUALITY' };
+  if (typeof aiResponse.overall_summary !== 'string') return { valid: false, reason: 'MISSING_OVERALL_SUMMARY' };
+  if (!Array.isArray(aiResponse.categories)) return { valid: false, reason: 'MISSING_CATEGORIES' };
+  if (!Array.isArray(aiResponse.strongest_areas)) return { valid: false, reason: 'MISSING_STRONGEST_AREAS' };
+  if (!Array.isArray(aiResponse.growth_areas)) return { valid: false, reason: 'MISSING_GROWTH_AREAS' };
 
   for (const category of aiResponse.categories) {
-    if (!category || typeof category !== 'object' || Array.isArray(category)) return false;
-    if (typeof category.name !== 'string' || typeof category.explanation !== 'string') return false;
-    if (!Number.isInteger(category.score) || category.score < 0 || category.score > 100) return false;
-    if (!RESULT_CATEGORY_LABELS.has(category.label)) return false;
+    if (!category || typeof category !== 'object' || Array.isArray(category)) return { valid: false, reason: 'INVALID_CATEGORY_OBJECT' };
+    if (typeof category.name !== 'string' || typeof category.explanation !== 'string') return { valid: false, reason: 'INVALID_CATEGORY_TEXT' };
+    if (!Number.isInteger(category.score) || category.score < 0 || category.score > 100) return { valid: false, reason: 'NON_INT_SCORE' };
+    if (!RESULT_CATEGORY_LABELS.has(category.label)) return { valid: false, reason: 'INVALID_CATEGORY_LABEL' };
   }
 
   for (const area of [...aiResponse.strongest_areas, ...aiResponse.growth_areas]) {
-    if (!area || typeof area !== 'object' || Array.isArray(area)) return false;
-    if (typeof area.skill_name !== 'string' || typeof area.reason !== 'string') return false;
+    if (!area || typeof area !== 'object' || Array.isArray(area)) return { valid: false, reason: 'INVALID_AREA_OBJECT' };
+    if (typeof area.skill_name !== 'string' || typeof area.reason !== 'string') return { valid: false, reason: 'INVALID_AREA_TEXT' };
   }
 
-  return true;
+  return { valid: true, reason: null };
 }
 
 async function callScoringPrompt(questionText, answerText, expectedPoints) {
@@ -253,9 +250,12 @@ async function callResultsPrompt(session) {
   ].join('\n');
 
   const aiResponse = await callGemini(`${systemPrompt}\n\n${userMessage}`);
-  if (!validateResultsResponse(aiResponse)) {
+  const validation = validateResultsResponse(aiResponse);
+  if (!validation.valid) {
+    console.error('[AI] Results schema invalid', { reason: validation.reason, provider: 'gemini', model: MODEL_NAME });
     const error = new Error('AI schema error');
     error.code = 'AI_SCHEMA_ERROR';
+    error.details = validation.reason;
     throw error;
   }
   return aiResponse;
@@ -272,4 +272,4 @@ function getRuntimeStatus() {
   };
 }
 
-module.exports = { initialize, callScoringPrompt, callResultsPrompt, isMockMode, validateResultsResponse, getRuntimeStatus };
+module.exports = { initialize, callScoringPrompt, callResultsPrompt, isMockMode, validateResultsResponse, getRuntimeStatus, shouldEnableForceTokens };

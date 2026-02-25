@@ -6,6 +6,7 @@ const api = require('../backend/api');
 const originalFetch = global.fetch;
 const originalAiMode = process.env.AI_MODE;
 const originalGeminiTimeout = process.env.GEMINI_TIMEOUT_MS;
+const originalNodeEnv = process.env.NODE_ENV;
 
 function buildSessionForResults() {
   return {
@@ -22,6 +23,8 @@ test.afterEach(() => {
   else process.env.AI_MODE = originalAiMode;
   if (originalGeminiTimeout === undefined) delete process.env.GEMINI_TIMEOUT_MS;
   else process.env.GEMINI_TIMEOUT_MS = originalGeminiTimeout;
+  if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = originalNodeEnv;
   api.initialize({ apiKey: '', model: 'gemini-2.5-flash' });
 });
 
@@ -44,6 +47,28 @@ test('mock mode does not perform outbound network call for scoring', async () =>
   assert.equal(fetchCalled, false);
   assert.equal(result.response_type, 'valid');
 });
+
+test('force token activation is restricted to test/mock/explicit contexts', async () => {
+  process.env.AI_MODE = 'real';
+  process.env.NODE_ENV = 'production';
+  delete process.env.ENABLE_TEST_TOKENS;
+  assert.equal(api.shouldEnableForceTokens(), false);
+
+  process.env.ENABLE_TEST_TOKENS = 'true';
+  assert.equal(api.shouldEnableForceTokens(), true);
+
+  delete process.env.ENABLE_TEST_TOKENS;
+  process.env.AI_MODE = 'mock';
+  assert.equal(api.shouldEnableForceTokens(), true);
+
+  const withMockToken = await api.callScoringPrompt('Question?', 'Normal answer with [force_invalid_schema] token.', {
+    minimum: 10,
+    target: 20,
+    excellent: 30
+  });
+  assert.deepEqual(withMockToken, { foo: 'bar' });
+});
+
 
 test('real mode performs outbound Gemini call for scoring when key is configured', async () => {
   process.env.AI_MODE = 'real';
@@ -140,7 +165,7 @@ test('scoring handles invalid JSON from Gemini safely as schema_invalid', async 
   assert.deepEqual(result.skills_detected, []);
 });
 
-test('real mode parses JSON wrapped in markdown code fences', async () => {
+test('real mode rejects non-JSON wrapped responses as AI schema errors', async () => {
   process.env.AI_MODE = 'real';
   api.initialize({ apiKey: 'gm-test-123456', model: 'gemini-2.5-flash' });
 
@@ -163,8 +188,9 @@ test('real mode parses JSON wrapped in markdown code fences', async () => {
     excellent: 30
   });
 
-  assert.equal(result.response_type, 'valid');
-  assert.equal(result.total_points, 8);
+  assert.equal(result.response_type, 'schema_invalid');
+  assert.equal(result.total_points, 0);
+  assert.deepEqual(result.skills_detected, []);
 });
 
 test('real mode times out long Gemini calls and surfaces retry-safe failure', async () => {

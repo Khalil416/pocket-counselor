@@ -136,6 +136,7 @@ test('results endpoint returns 502 for AI schema errors', async () => {
   api.callResultsPrompt = async () => {
     const err = new Error('AI schema error');
     err.code = 'AI_SCHEMA_ERROR';
+    err.details = 'MISSING_GROWTH_AREAS';
     throw err;
   };
 
@@ -158,6 +159,7 @@ test('results endpoint returns 502 for AI schema errors', async () => {
     const results = await jfetch(`/api/session/${sessionId}/results`);
     assert.equal(results.status, 502);
     assert.equal(results.body.error.code, 'AI_SCHEMA_ERROR');
+    assert.equal(results.body.details, 'MISSING_GROWTH_AREAS');
   } finally {
     api.callResultsPrompt = originalCallResultsPrompt;
   }

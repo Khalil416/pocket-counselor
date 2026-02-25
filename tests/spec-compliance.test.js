@@ -172,9 +172,11 @@ test('10) results schema enforces profile quality, category labels, and integer 
     strongest_areas: [{ skill_name: 'Empati', reason: 'Cevaplarınıza göre bu beceri sıkça gözlendi.' }],
     growth_areas: [{ skill_name: 'Sayısal Muhakeme', reason: 'Bu alanda daha fazla örnek fırsatı oluşabilir.' }]
   };
-  assert.equal(validateResultsResponse(validPayload), true);
-  assert.equal(validateResultsResponse({ ...validPayload, profile_quality: 'Maximum Depth' }), false);
-  assert.equal(validateResultsResponse({ ...validPayload, categories: [{ name: 'X', score: 55, label: 'Developing', explanation: 'x' }] }), false);
-  assert.equal(validateResultsResponse({ ...validPayload, categories: [{ name: 'X', score: 101, label: 'Strong', explanation: 'x' }] }), false);
-  assert.equal(validateResultsResponse({ ...validPayload, categories: [{ name: 'X', score: 55.5, label: 'Strong', explanation: 'x' }] }), false);
+  assert.deepEqual(validateResultsResponse(validPayload), { valid: true, reason: null });
+  assert.equal(validateResultsResponse({ ...validPayload, profile_quality: 'Maximum Depth' }).reason, 'INVALID_PROFILE_QUALITY');
+  assert.equal(validateResultsResponse({ ...validPayload, categories: [{ name: 'X', score: 55, label: 'Developing', explanation: 'x' }] }).reason, 'INVALID_CATEGORY_LABEL');
+  assert.equal(validateResultsResponse({ ...validPayload, categories: [{ name: 'X', score: 101, label: 'Strong', explanation: 'x' }] }).reason, 'NON_INT_SCORE');
+  assert.equal(validateResultsResponse({ ...validPayload, categories: [{ name: 'X', score: 55.5, label: 'Strong', explanation: 'x' }] }).reason, 'NON_INT_SCORE');
+  assert.equal(validateResultsResponse({ ...validPayload, growth_areas: undefined }).reason, 'MISSING_GROWTH_AREAS');
+  assert.equal(validateResultsResponse({ ...validPayload, needs_attention: [] }).reason, 'UNSUPPORTED_FIELD_NEEDS_ATTENTION');
 });
