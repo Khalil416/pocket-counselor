@@ -5,6 +5,7 @@ const api = require('../backend/api');
 
 const originalFetch = global.fetch;
 const originalAiMode = process.env.AI_MODE;
+const originalGeminiTimeout = process.env.GEMINI_TIMEOUT_MS;
 
 function buildSessionForResults() {
   return {
@@ -19,6 +20,8 @@ test.afterEach(() => {
   global.fetch = originalFetch;
   if (originalAiMode === undefined) delete process.env.AI_MODE;
   else process.env.AI_MODE = originalAiMode;
+  if (originalGeminiTimeout === undefined) delete process.env.GEMINI_TIMEOUT_MS;
+  else process.env.GEMINI_TIMEOUT_MS = originalGeminiTimeout;
   api.initialize({ apiKey: '', model: 'gemini-2.5-flash' });
 });
 
@@ -135,6 +138,59 @@ test('scoring handles invalid JSON from Gemini safely as schema_invalid', async 
   assert.equal(result.response_type, 'schema_invalid');
   assert.equal(result.total_points, 0);
   assert.deepEqual(result.skills_detected, []);
+});
+
+test('real mode parses JSON wrapped in markdown code fences', async () => {
+  process.env.AI_MODE = 'real';
+  api.initialize({ apiKey: 'gm-test-123456', model: 'gemini-2.5-flash' });
+
+  global.fetch = async () => ({
+    ok: true,
+    json: async () => ({
+      candidates: [{
+        content: {
+          parts: [{
+            text: '```json\n{"response_type":"valid","total_points":8,"skills_detected":[{"skill_id":"empathy","points":5},{"skill_id":"planning","points":3}]}\n```'
+          }]
+        }
+      }]
+    })
+  });
+
+  const result = await api.callScoringPrompt('Question?', 'Detailed answer text to parse fenced json.', {
+    minimum: 10,
+    target: 20,
+    excellent: 30
+  });
+
+  assert.equal(result.response_type, 'valid');
+  assert.equal(result.total_points, 8);
+});
+
+test('real mode times out long Gemini calls and surfaces retry-safe failure', async () => {
+  process.env.AI_MODE = 'real';
+  process.env.GEMINI_TIMEOUT_MS = '20';
+  api.initialize({ apiKey: 'gm-test-123456', model: 'gemini-2.5-flash' });
+
+  global.fetch = async (_url, options) => {
+    await new Promise((_, reject) => {
+      options.signal.addEventListener('abort', () => {
+        const err = new Error('aborted');
+        err.name = 'AbortError';
+        reject(err);
+      });
+    });
+  };
+
+  await assert.rejects(
+    () => api.callScoringPrompt('Question?', 'Detailed answer text for timeout path.', {
+      minimum: 10,
+      target: 20,
+      excellent: 30
+    }),
+    (error) => error && error.code === 'AI_TIMEOUT'
+  );
+
 });
 
 test('results schema requires growth_areas and rejects needs_attention payload', async () => {
