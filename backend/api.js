@@ -20,7 +20,20 @@ function isMockMode() {
 }
 
 function readPromptFile(promptPath) {
-  return fs.readFileSync(promptPath, 'utf-8');
+  const candidates = [
+    promptPath,
+    path.join(process.cwd(), 'prompts', path.basename(promptPath))
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return fs.readFileSync(candidate, 'utf-8');
+    }
+  }
+
+  const error = new Error(`Prompt file not found: ${path.basename(promptPath)}`);
+  error.code = 'PROMPT_FILE_NOT_FOUND';
+  throw error;
 }
 
 

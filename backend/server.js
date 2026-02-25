@@ -13,7 +13,10 @@ const {
   getQuestionById,
   applyAiScoring,
   markAiFailure,
-  getClientSession
+  getClientSession,
+  markAnswerSubmitted,
+  markAnswerScored,
+  isResultsReady
 } = require('./session');
 const { checkForCheckpoint, getProfileLabel } = require('./checkpoint');
 const api = require('./api');
@@ -109,7 +112,8 @@ app.post('/api/session/:id/answer', async (req, res) => {
     return res.status(400).json({ error: 'invalid_question_id', message: 'Invalid question ID' });
   }
 
-  void fireScoring(session, questionData, normalizedAnswer.trim());
+  const answerSubmissionIndex = markAnswerSubmitted(session);
+  void fireScoring(session, questionData, normalizedAnswer.trim(), answerSubmissionIndex);
 
   const nextQuestion = getNextQuestion(session);
   const forceFinishAt35 = session.counters.questionsShown >= 35;
@@ -122,11 +126,15 @@ app.post('/api/session/:id/answer', async (req, res) => {
     canSkip: canSkip(session),
     finished: !nextQuestion || forceFinishAt35,
     forcedResultsByLimit: forceFinishAt35,
-    lowDataQualityWarning: forceFinishAt35 && session.checkpoints.reached === 0
+    lowDataQualityWarning: forceFinishAt35 && session.checkpoints.reached === 0,
+    answerSubmissionIndex,
+    lastScoredAnswerIndex: session._lastScoredAnswerIndex,
+    lastAnswerScored: session._lastScoredAnswerIndex >= answerSubmissionIndex,
+    answeredCount: session.counters.questionsAnswered
   });
 });
 
-async function fireScoring(session, questionData, answerText) {
+async function fireScoring(session, questionData, answerText, answerSubmissionIndex) {
   try {
     let aiResponse;
     try {
@@ -137,6 +145,7 @@ async function fireScoring(session, questionData, answerText) {
 
     const applied = applyAiScoring(session, questionData, answerText, aiResponse);
     if (!applied) return;
+    markAnswerScored(session, answerSubmissionIndex);
 
     const checkpoint = checkForCheckpoint(session);
     if (checkpoint) session._pendingCheckpoint = checkpoint;
@@ -160,6 +169,11 @@ app.get('/api/session/:id/state', (req, res) => {
     checkpoint: session._pendingCheckpoint,
     warning: session._pendingWarning,
     low_data_quality_warning: session._hasLowDataWarning,
+    scoring: {
+      answers_submitted: session._lastAnswerSubmissionIndex,
+      last_scored_answer_index: session._lastScoredAnswerIndex,
+      results_ready: isResultsReady(session)
+    },
     session: getClientSession(session)
   };
 
@@ -186,12 +200,44 @@ app.post('/api/session/:id/skip', (req, res) => {
   res.json({ skipped: true, maxSkipsReached, nextQuestion, session: getClientSession(session), canSkip: canSkip(session), finished: !nextQuestion || forceFinishAt35 });
 });
 
-app.get('/api/session/:id/results', async (req, res) => {
+async function waitForResultsReadiness(session, timeoutMs = 4000, intervalMs = 100) {
+  const start = Date.now();
+  while (Date.now() - start <= timeoutMs) {
+    if (isResultsReady(session)) return true;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return isResultsReady(session);
+}
+
+async function handleSessionResults(req, res) {
   const session = getSession(req.params.id);
-  if (!session) return res.status(404).json({ error: 'Session not found' });
+  if (!session) {
+    return res.status(404).json({
+      error: {
+        code: 'SESSION_NOT_FOUND',
+        message: 'Session not found.'
+      }
+    });
+  }
+
+  if (session._resultsRequested && session._resultsCache) return res.json(session._resultsCache);
+
+  const ready = await waitForResultsReadiness(session);
+  if (!ready) {
+    return res.status(409).json({
+      error: {
+        code: 'RESULTS_NOT_READY',
+        message: 'Results are not ready yet. Please retry once scoring catches up.'
+      },
+      readiness: {
+        minimum_answered_required: 15,
+        answered_count: session.counters.questionsAnswered,
+        last_scored_answer_index: session._lastScoredAnswerIndex
+      }
+    });
+  }
 
   finishSession(session);
-  if (session._resultsRequested && session._resultsCache) return res.json(session._resultsCache);
 
   try {
     const aiResults = await api.callResultsPrompt(session);
@@ -200,17 +246,26 @@ app.get('/api/session/:id/results', async (req, res) => {
 
     return res.json(aiResults);
   } catch (error) {
-    if (error.message === 'AI schema error') console.error('AI schema error');
-    else console.error('Results generation failed:', error.message);
-    return res.json({
-      profile_quality: getProfileLabel(session.checkpoints.reached),
-      overall_summary: 'Results could not be generated.',
-      categories: [],
-      strongest_areas: [],
-      growth_areas: []
+    console.error('Results generation failed:', error.message);
+    const errorCode = error.code || (error.message === 'AI schema error' ? 'AI_SCHEMA_ERROR' : 'RESULTS_GENERATION_FAILED');
+    return res.status(500).json({
+      error: {
+        code: errorCode,
+        message: 'Results generation failed.'
+      },
+      fallback: {
+        profile_quality: getProfileLabel(session.checkpoints.reached),
+        overall_summary: 'Results could not be generated.',
+        categories: [],
+        strongest_areas: [],
+        growth_areas: []
+      }
     });
   }
-});
+}
+
+app.get('/api/session/:id/results', handleSessionResults);
+app.post('/api/session/:id/results', handleSessionResults);
 
 app.get('/api/session/:id/answers', (req, res) => {
   const session = getSession(req.params.id);

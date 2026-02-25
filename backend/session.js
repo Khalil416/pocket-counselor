@@ -43,7 +43,9 @@ function createSession() {
     _pendingWarning: null,
     _hasLowDataWarning: false,
     _resultsCache: null,
-    _resultsRequested: false
+    _resultsRequested: false,
+    _lastAnswerSubmissionIndex: 0,
+    _lastScoredAnswerIndex: 0
   };
   sessions.set(session.sessionId, session);
   return session;
@@ -161,5 +163,23 @@ module.exports = {
   getClientSession,
   validateScoringResponse,
   ALLOWED_SKILL_IDS,
-  FIBONACCI_POINTS
+  FIBONACCI_POINTS,
+  markAnswerSubmitted,
+  markAnswerScored,
+  isResultsReady
 };
+
+function markAnswerSubmitted(session) {
+  session._lastAnswerSubmissionIndex += 1;
+  return session._lastAnswerSubmissionIndex;
+}
+
+function markAnswerScored(session, answerIndex) {
+  if (Number.isInteger(answerIndex) && answerIndex > session._lastScoredAnswerIndex) {
+    session._lastScoredAnswerIndex = answerIndex;
+  }
+}
+
+function isResultsReady(session) {
+  return session.counters.questionsAnswered >= 15 && session._lastScoredAnswerIndex >= 15;
+}
