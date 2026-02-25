@@ -177,7 +177,7 @@ async function handleNext() {
         const res = await fetch(`/api/session/${sessionId}/answer`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ questionId: currentQuestion.id, answer })
+            body: JSON.stringify({ questionId: currentQuestion.id, answerText: answer })
         });
 
         if (!res.ok) {
@@ -342,7 +342,7 @@ async function showResults() {
     showLoading('Generating your skill profile...');
 
     try {
-        const res = await fetch(`/api/session/${sessionId}/results`);
+        const res = await fetch(`/api/session/${sessionId}/results`, { method: "POST" });
         if (!res.ok) throw new Error('Failed to get results');
 
         const data = await res.json();
