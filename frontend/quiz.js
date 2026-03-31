@@ -125,7 +125,7 @@ async function pollStatus() {
 
         // Show warning if any
         if (data.warning) {
-            showToast(data.warning === 'invalid_hard' ? 'Geçersiz cevap sayısı yüksek. Sonuç kalitesi düşebilir.' : 'Bazı cevaplar geçersiz algılandı.', 'warning');
+            showToast(data.warning === 'invalid_hard' ? 'High number of invalid answers. Result quality may be reduced.' : 'Some answers were detected as invalid.', 'warning');
         }
 
         // Handle checkpoint
@@ -165,16 +165,17 @@ async function waitUntilResultsReady(maxAttempts = 30, intervalMs = 200) {
 }
 
 async function maybeShowResultsReadyCheckpoint(data) {
-    if (resultsCheckpointScheduled || submittedAnswersCount < 15) return;
+    if (resultsCheckpointScheduled || submittedAnswersCount < 10) return;
     resultsCheckpointScheduled = true;
 
     try {
-        const readyState = await waitUntilResultsReady();
+        const readyState = await waitUntilResultsReady(30, 1000);
         if (!readyState) {
             console.warn('Results-ready checkpoint was not reached in time', {
                 submittedAnswersCount,
                 sessionId
             });
+            resultsCheckpointScheduled = false; // allow retry on next submission
             return;
         }
 
@@ -188,10 +189,12 @@ async function maybeShowResultsReadyCheckpoint(data) {
                 label: 'Results are ready',
                 questionsAnswered: readyState.session?.counters?.questionsAnswered ?? 15,
                 totalPoints: readyState.session?.points?.total ?? data.session?.points?.total ?? 0,
-                autoShow: false
+                autoShow: false,
+                resultsReady: true
             });
         }, 500);
     } catch (error) {
+        resultsCheckpointScheduled = false; // allow retry on next submission
         console.error('Failed to auto-show results checkpoint', error);
     }
 }
@@ -355,6 +358,16 @@ function showCheckpointModal(checkpoint) {
         infoText += ` • Total Points: ${checkpoint.totalPoints}`;
     }
     document.getElementById('modalInfo').textContent = infoText;
+    // Only show "See My Results" if results are actually ready
+    const seeResultsBtn = document.getElementById('seeResultsBtn');
+    const modalDesc = document.getElementById('modalDescription');
+    if (checkpoint.resultsReady) {
+        seeResultsBtn.style.display = '';
+        modalDesc.textContent = 'You can see your results now, or continue for more detail.';
+    } else {
+        seeResultsBtn.style.display = 'none';
+        modalDesc.textContent = 'Great progress! Answer a few more questions to unlock your full results.';
+    }
     modal.style.display = 'flex';
 }
 
@@ -381,6 +394,17 @@ async function showResults() {
     }
     
     stopStatusPolling();
+    showLoading('Waiting for scoring to finish...');
+
+    // Wait for all async scoring to complete before requesting results
+    const ready = await waitUntilResultsReady(90, 1000);
+    if (!ready) {
+        hideLoading();
+        showToast('Scoring is still in progress. Please wait a moment and try again.', 'warning');
+        startStatusPolling();
+        return;
+    }
+
     showLoading('Generating your skill profile...');
 
     try {
@@ -394,6 +418,24 @@ async function showResults() {
                 endpoint,
                 response: data
             });
+            // If the backend returned fallback data, render it instead of failing silently
+            if (data.fallback && typeof data.fallback === 'object') {
+                hideLoading();
+                showScreen('resultsScreen');
+                const resultsScreen = document.getElementById('resultsScreen');
+                if (resultsScreen) {
+                    resultsScreen.style.display = 'flex';
+                    resultsScreen.classList.add('active');
+                }
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        renderResults(data.fallback);
+                        const container = document.querySelector('.results-container');
+                        if (container) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    });
+                });
+                return;
+            }
             throw new Error(data?.error?.code || 'Failed to get results');
         }
 

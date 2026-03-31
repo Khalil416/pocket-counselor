@@ -8,7 +8,7 @@
   <meta name="description" content="Discover your unique skill profile through an AI-powered open-ended assessment.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:wght@500;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -19,23 +19,23 @@
   <div id="welcomeScreen" class="screen active">
     <div class="welcome-container">
       <div class="logo-glow"></div>
-      <div class="welcome-icon">🧠</div>
+      <div class="welcome-icon">&#9672;</div>
       <h1 class="welcome-title">Pocket Counselor</h1>
       <p class="welcome-subtitle">Discover Your Unique Skill Profile</p>
       <div class="welcome-description">
-        <p>Answer open-ended questions about how you think, work, and solve problems. Our AI analyzes your responses to
-          build a detailed skill profile.</p>
+        <p>Answer open-ended questions about how you think, work, and solve problems. Your responses are analyzed to
+          build a personalized skill profile.</p>
         <div class="welcome-features">
-          <div class="feature"><span class="feature-icon">✍️</span> Open-ended questions</div>
-          <div class="feature"><span class="feature-icon">🤖</span> AI-powered analysis</div>
-          <div class="feature"><span class="feature-icon">📊</span> Detailed skill bars</div>
+          <div class="feature"><span class="feature-icon">&#9998;</span> Open-ended questions</div>
+          <div class="feature"><span class="feature-icon">&#9881;</span> Intelligent analysis</div>
+          <div class="feature"><span class="feature-icon">&#9776;</span> Detailed skill profile</div>
         </div>
       </div>
       <button id="startBtn" class="btn-primary btn-glow" onclick="startQuiz()">
         Begin Assessment
-        <span class="btn-arrow">→</span>
+        <span class="btn-arrow">&rarr;</span>
       </button>
-      <p class="welcome-note">Takes roughly 15–30 minutes • No right or wrong answers</p>
+      <p class="welcome-note">Takes roughly 15&ndash;30 minutes &middot; No right or wrong answers</p>
     </div>
   </div>
 
@@ -82,13 +82,12 @@
       <h2 class="modal-title">Checkpoint Reached</h2>
       <div class="modal-badge" id="modalBadge">Basic Profile</div>
       <p class="modal-info" id="modalInfo">Questions Answered: 10</p>
-      <p class="modal-description">
+      <p class="modal-description" id="modalDescription">
         You can see your results now, or continue for more detail.
-        <br><small>Continuing adds about 5 more questions.</small>
       </p>
       <div class="modal-actions">
-        <button class="btn-primary" onclick="showResults()">See My Results</button>
-        <button class="btn-secondary" onclick="continueQuiz()">Continue for More</button>
+        <button id="seeResultsBtn" class="btn-primary" onclick="showResults()">See My Results</button>
+        <button class="btn-secondary" onclick="continueQuiz()">Continue</button>
       </div>
     </div>
   </div>
