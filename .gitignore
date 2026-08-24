@@ -17,16 +17,12 @@ target/
 *.class
 *.log
 *.jar
+!**/.mvn/wrapper/maven-wrapper.jar
 *.war
 *.ear
 *.nar
 hs_err_pid*
 replay_pid*
-
-# Maven
-.mvn/
-mvnw
-mvnw.cmd
 
 # Gradle (if used)
 .gradle/
