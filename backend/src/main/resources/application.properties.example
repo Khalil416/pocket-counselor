@@ -1,0 +1,20 @@
+# Copy this file to application.properties (same directory) and adjust as needed.
+# application.properties is gitignored -- your real key never gets committed.
+
+# AI mode: "mock" (default) returns canned/simulated scoring with no network
+# calls and no API key required -- the whole app runs and can be demoed as-is.
+# Set to "real" to actually call Gemini.
+ai.mode=mock
+
+# Gemini API key from https://aistudio.google.com/app/apikey
+# Only required when ai.mode=real.
+gemini.api.key=
+
+# Gemini model name used for scoring/results calls.
+gemini.model=gemini-2.0-flash
+
+# Base URL for the Gemini API.
+gemini.base.url=https://generativelanguage.googleapis.com
+
+# Per-request timeout, in seconds, for Gemini API calls.
+gemini.timeout.seconds=30

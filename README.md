@@ -65,25 +65,47 @@ pocket-counselor/
 ### Prerequisites
 
 - Java 17+
-- Maven 3.6+
-- A Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+- A Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey) -- only needed for real Gemini scoring; the app runs without one in mock mode (see Configuration below)
+
+The repo includes the Maven wrapper (`mvnw` / `mvnw.cmd`), so a separate Maven install isn't required.
 
 ### Configuration
 
-Open `backend/src/main/resources/application.properties` and set your API key:
+**No API key needed to try it out.** By default the app runs in mock mode
+(`ai.mode=mock`), which returns simulated scoring with no network calls. You
+can clone the repo and have the full quiz flow working in one command --
+useful for seeing how it's wired up before you commit to an API key.
+
+Copy the example config and edit it:
+
+```bash
+cp backend/src/main/resources/application.properties.example backend/src/main/resources/application.properties
+```
+
+`application.properties` is gitignored, so your key never gets committed.
+
+To use real Gemini scoring instead of mock data, edit
+`backend/src/main/resources/application.properties` and set both:
 
 ```properties
+ai.mode=real
 gemini.api.key=YOUR_KEY_HERE
 ```
 
-Or pass it as an environment variable.
+(Get a key from [Google AI Studio](https://aistudio.google.com/app/apikey).)
+Setting `gemini.api.key` alone does nothing -- `ai.mode` must also be `real`,
+or the app keeps using mock scoring.
 
 ### Run
 
 ```bash
 cd backend
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
+
+On Windows (cmd/PowerShell), use `mvnw.cmd` instead of `./mvnw`. No separate
+Maven install is required -- the wrapper downloads the right version
+automatically on first run.
 
 Open `http://localhost:8080` in your browser. The backend serves the frontend as static files.
 
