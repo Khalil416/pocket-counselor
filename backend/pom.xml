@@ -17,7 +17,7 @@
     <artifactId>pocket-counselor</artifactId>
     <version>1.0.0</version>
     <name>Pocket Counselor</name>
-    <description>Career path counselor MVP using Google Gemini AI</description>
+    <description>Career path counselor MVP -- pluggable LLM provider (Gemini, OpenAI, Anthropic)</description>
 
     <properties>
         <java.version>17</java.version>
@@ -30,7 +30,7 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- HTTP Client for calling Gemini API -->
+        <!-- HTTP Client for calling LLM provider APIs -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
@@ -46,6 +46,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Stub HTTP server for asserting LLM provider request/response shapes -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>mockwebserver</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

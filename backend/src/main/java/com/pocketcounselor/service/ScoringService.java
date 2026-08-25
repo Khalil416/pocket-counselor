@@ -28,26 +28,17 @@ public class ScoringService {
     @Async("scoringExecutor")
     public void fireScoring(Session session, Question question, String answerText, int answerSubmissionIndex) {
         try {
+            // Rate-limit pacing and transport retries live in the LLM client layer.
             ScoringResponse aiResponse;
             try {
                 aiResponse = aiService.callScoringPrompt(question, answerText);
-            } catch (Exception firstAttempt) {
-                log.warn("[AI] scoring first attempt failed: {}, retrying after delay", firstAttempt.getMessage());
-                try {
-                    Thread.sleep(2000); // backoff before retry to avoid 429 rate limit
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                log.error("[AI] scoring failed: {}", e.getMessage());
+                synchronized (session) {
+                    sessionService.markAiFailure(session, question, answerText);
+                    sessionService.markAnswerScored(session, answerSubmissionIndex);
                 }
-                try {
-                    aiResponse = aiService.callScoringPrompt(question, answerText);
-                } catch (Exception secondAttempt) {
-                    log.error("[AI] scoring failed after retry: {}", secondAttempt.getMessage());
-                    synchronized (session) {
-                        sessionService.markAiFailure(session, question, answerText);
-                        sessionService.markAnswerScored(session, answerSubmissionIndex);
-                    }
-                    return;
-                }
+                return;
             }
 
             boolean valid = aiService.validateScoringResponse(aiResponse);

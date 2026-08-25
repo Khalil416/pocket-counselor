@@ -219,45 +219,18 @@ public class SessionController {
 
         sessionService.finishSession(session);
 
-        // Small delay before results call to let Gemini rate limits reset after scoring calls
-        try { Thread.sleep(3000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
-
-        // Retry up to 3 times with backoff (Gemini may 429 after scoring calls)
-        Exception lastError = null;
-        for (int attempt = 1; attempt <= 3; attempt++) {
-            try {
-                ResultsResponse aiResults = aiService.callResultsPrompt(session);
-
-                if (!aiService.validateResultsResponse(aiResults)) {
-                    log.warn("Results response failed validation for session {} (attempt {})", id, attempt);
-                    lastError = new RuntimeException("AI_SCHEMA_ERROR");
-                    Thread.sleep(2000);
-                    continue;
-                }
-
-                session.setResultsRequested(true);
-                session.setResultsCache(aiResults);
-                return ResponseEntity.ok(aiResults);
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                lastError = ie;
-                break;
-            } catch (Exception e) {
-                log.warn("Results generation attempt {} failed for session {}: {}", attempt, id, e.getMessage());
-                lastError = e;
-                if (attempt < 3) {
-                    try { Thread.sleep(5000); } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
-            }
+        // Retries -- rate limits and off-spec responses alike -- are handled below
+        // this layer: transport by the LLM client, schema by AiService.
+        try {
+            ResultsResponse aiResults = aiService.callResultsPrompt(session);
+            session.setResultsRequested(true);
+            session.setResultsCache(aiResults);
+            return ResponseEntity.ok(aiResults);
+        } catch (Exception e) {
+            log.error("Results generation failed for session {}: {}", id, e.getMessage());
+            return ResponseEntity.internalServerError().body(buildResultsError(
+                    "RESULTS_GENERATION_FAILED", session));
         }
-
-        log.error("Results generation failed after retries for session {}: {}",
-                id, lastError != null ? lastError.getMessage() : "unknown");
-        return ResponseEntity.internalServerError().body(buildResultsError(
-                "RESULTS_GENERATION_FAILED", session));
     }
 
     private boolean waitForResultsReady(Session session, long timeoutMs, long intervalMs) {

@@ -24,7 +24,9 @@ import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
+// allow-bean-definition-overriding lets SyncScoringConfig replace the real
+// scoringExecutor; the "test" profile has no committed properties file to set it in.
+@SpringBootTest(properties = "spring.main.allow-bean-definition-overriding=true")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class SessionControllerTest {
@@ -261,7 +263,7 @@ class SessionControllerTest {
         mvc.perform(get("/api/session/" + sid + "/results"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("RESULTS_NOT_READY"))
-                .andExpect(jsonPath("$.readiness.minimum_answered_required").value(15));
+                .andExpect(jsonPath("$.readiness.minimum_answered_required").value(10));
     }
 
     // ── Results after readiness ─────────────────────

@@ -28,11 +28,13 @@ public class HealthController {
 
     @GetMapping("/api/ai/status")
     public Map<String, Object> aiStatus() {
+        // "model" and "keyLoaded" describe whichever provider ai.provider selects.
         return Map.of(
                 "mode", aiConfig.getMode(),
-                "keyLoaded", aiConfig.isApiKeyLoaded(),
+                "provider", aiConfig.normalizedProvider(),
+                "keyLoaded", aiConfig.isActiveKeyLoaded(),
                 "promptFilesOk", promptService.isLoaded(),
-                "model", aiConfig.getModel()
+                "model", aiConfig.getActiveModel()
         );
     }
 }

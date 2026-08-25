@@ -1,24 +1,20 @@
 package com.pocketcounselor.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pocketcounselor.config.AiConfig;
 import com.pocketcounselor.config.DataLoader;
 import com.pocketcounselor.dto.ResultsResponse;
 import com.pocketcounselor.dto.ScoringResponse;
+import com.pocketcounselor.llm.LlmClientResolver;
+import com.pocketcounselor.llm.LlmException;
 import com.pocketcounselor.model.Question;
 import com.pocketcounselor.model.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 
-import java.time.Duration;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -35,18 +31,23 @@ public class AiService {
     private static final Pattern FENCED_JSON = Pattern.compile(
             "```(?:json)?\\s*\\n?(.*?)\\n?\\s*```", Pattern.DOTALL);
 
+    private static final double SCORING_TEMPERATURE = 0.2;
+    private static final double RESULTS_TEMPERATURE = 0.7;
+    /** One retry when the model returns a well-formed but off-spec profile. */
+    private static final int RESULTS_SCHEMA_ATTEMPTS = 2;
+
     private final AiConfig aiConfig;
     private final DataLoader dataLoader;
     private final PromptService promptService;
-    private final WebClient geminiWebClient;
+    private final LlmClientResolver llmClientResolver;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AiService(AiConfig aiConfig, DataLoader dataLoader,
-                     PromptService promptService, WebClient geminiWebClient) {
+                     PromptService promptService, LlmClientResolver llmClientResolver) {
         this.aiConfig = aiConfig;
         this.dataLoader = dataLoader;
         this.promptService = promptService;
-        this.geminiWebClient = geminiWebClient;
+        this.llmClientResolver = llmClientResolver;
     }
 
     public boolean isMockMode() {
@@ -58,92 +59,52 @@ public class AiService {
             return buildMockScoring(answerText);
         }
         String promptText = promptService.buildScoringPrompt(question, answerText);
-        String rawJson = callGemini(promptText, 0.2);
-        return parseJson(rawJson, ScoringResponse.class);
+        String rawText = llmClientResolver.get().complete(promptText, SCORING_TEMPERATURE);
+        return parseJson(rawText, ScoringResponse.class);
     }
 
+    /**
+     * Generate the results profile.
+     *
+     * <p>A response that parses but fails schema validation is retried once: the
+     * model occasionally emits a well-formed but off-spec profile, and a second
+     * sample usually lands. Transport-level retries (rate limits, 5xx) belong to
+     * the client layer and are not handled here.
+     *
+     * @throws RuntimeException if both attempts fail to produce a valid profile
+     */
     public ResultsResponse callResultsPrompt(Session session) {
         if (isMockMode()) {
             return buildMockResults(session);
         }
+
         String promptText = promptService.buildResultsPrompt(session);
-        String rawJson = callGemini(promptText, 0.7);
-        return parseJson(rawJson, ResultsResponse.class);
-    }
+        RuntimeException lastError = null;
 
-    // ----- Gemini HTTP call -----
+        for (int attempt = 1; attempt <= RESULTS_SCHEMA_ATTEMPTS; attempt++) {
+            try {
+                String rawText = llmClientResolver.get().complete(promptText, RESULTS_TEMPERATURE);
+                ResultsResponse parsed = parseJson(rawText, ResultsResponse.class);
 
-    private String callGemini(String promptText, double temperature) {
-        if (!aiConfig.isApiKeyLoaded()) {
-            throw new RuntimeException("Gemini API key is not configured. "
-                    + "Set gemini.api.key in application.properties or switch to ai.mode=mock.");
-        }
-
-        String model = aiConfig.getModel();
-        String url = "/v1beta/models/" + model + ":generateContent?key=" + aiConfig.getApiKey();
-
-        Map<String, Object> requestBody = Map.of(
-                "contents", List.of(
-                        Map.of("parts", List.of(
-                                Map.of("text", promptText)
-                        ))
-                ),
-                "generationConfig", Map.of(
-                        "temperature", temperature,
-                        "responseMimeType", "application/json"
-                )
-        );
-
-        log.info("[AI] Gemini request started (model={})", model);
-
-        String responseBody = geminiWebClient.post()
-                .uri(url)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(requestBody)
-                .retrieve()
-                .bodyToMono(String.class)
-                .timeout(Duration.ofSeconds(aiConfig.getTimeoutSeconds()))
-                .block();
-
-        if (responseBody == null || responseBody.isBlank()) {
-            throw new RuntimeException("Empty response from Gemini API");
-        }
-
-        log.debug("[AI] Gemini raw response length={}", responseBody.length());
-
-        try {
-            JsonNode root = objectMapper.readTree(responseBody);
-
-            // Check for API-level error
-            if (root.has("error")) {
-                int httpCode = root.path("error").path("code").asInt(0);
-                String errorMsg = root.path("error").path("message").asText("Unknown Gemini error");
-                log.error("[AI] Gemini API error (code={}): {}", httpCode, errorMsg);
-                if (httpCode == 429) {
-                    log.warn("[AI] Rate limited by Gemini. Waiting 5 seconds before retry...");
-                    try { Thread.sleep(5000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                if (validateResultsResponse(parsed)) {
+                    return parsed;
                 }
-                throw new RuntimeException("Gemini API error (" + httpCode + "): " + errorMsg);
+
+                log.warn("[AI] results response failed schema validation (attempt {}/{})",
+                        attempt, RESULTS_SCHEMA_ATTEMPTS);
+                lastError = new RuntimeException("AI_SCHEMA_ERROR");
+            } catch (LlmException e) {
+                // Transport failures are the client layer's business, not ours.
+                throw e;
+            } catch (RuntimeException e) {
+                // A body that will not parse is a schema failure too -- worth one more sample.
+                log.warn("[AI] results response unparseable (attempt {}/{}): {}",
+                        attempt, RESULTS_SCHEMA_ATTEMPTS, e.getMessage());
+                lastError = e;
             }
-
-            String text = root
-                    .path("candidates").path(0)
-                    .path("content").path("parts").path(0)
-                    .path("text").asText(null);
-
-            if (text == null || text.isBlank()) {
-                throw new RuntimeException("No text content in Gemini response");
-            }
-
-            log.info("[AI] Gemini request succeeded");
-
-            // Throttle: brief pause after each call to stay under Gemini free-tier rate limit
-            try { Thread.sleep(1500); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
-
-            return text;
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to parse Gemini response envelope", e);
         }
+
+        throw lastError;
     }
 
     // ----- JSON extraction & parsing -----

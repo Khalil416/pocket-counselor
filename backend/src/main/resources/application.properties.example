@@ -1,20 +1,78 @@
 # Copy this file to application.properties (same directory) and adjust as needed.
 # application.properties is gitignored -- your real key never gets committed.
 
-# AI mode: "mock" (default) returns canned/simulated scoring with no network
-# calls and no API key required -- the whole app runs and can be demoed as-is.
-# Set to "real" to actually call Gemini.
+# ============================================
+# Mode
+# ============================================
+# "mock" (default) returns canned/simulated scoring with no network calls and no
+# API key required -- the whole app runs and can be demoed as-is.
+# Set to "real" to actually call an LLM provider.
 ai.mode=mock
 
-# Gemini API key from https://aistudio.google.com/app/apikey
-# Only required when ai.mode=real.
-gemini.api.key=
+# ============================================
+# Provider selection
+# ============================================
+# Which provider to use when ai.mode=real: gemini | openai | anthropic
+# The engine is identical across all three -- only the wire format differs.
+# An unknown value, or a missing api-key/model for the selected provider, fails
+# the application start with an explicit message rather than at first request.
+ai.provider=gemini
 
-# Gemini model name used for scoring/results calls.
-gemini.model=gemini-2.0-flash
+# ============================================
+# Google Gemini
+# ============================================
+# Key from https://aistudio.google.com/app/apikey
+ai.gemini.api-key=
+ai.gemini.model=gemini-2.0-flash
+ai.gemini.base-url=https://generativelanguage.googleapis.com
+ai.gemini.timeout-seconds=30
 
-# Base URL for the Gemini API.
-gemini.base.url=https://generativelanguage.googleapis.com
+# ============================================
+# OpenAI
+# ============================================
+# Key from https://platform.openai.com/api-keys
+#ai.openai.api-key=
+#ai.openai.model=gpt-4o-mini
+#ai.openai.base-url=https://api.openai.com
+#ai.openai.timeout-seconds=30
+# Sends response_format=json_object. OpenAI rejects this unless the prompt
+# contains the word "json" -- both prompt templates do, so it is on by default.
+#ai.openai.json-mode=true
+# Sends the temperature parameter. On by default because gpt-4o-mini accepts it.
+# GPT-5-class reasoning models reject any non-default temperature with
+# unsupported_value -- set this to false when pointing at one.
+#ai.openai.send-temperature=true
 
-# Per-request timeout, in seconds, for Gemini API calls.
-gemini.timeout.seconds=30
+# ============================================
+# Anthropic
+# ============================================
+# Key from https://console.anthropic.com/settings/keys
+#ai.anthropic.api-key=
+# Model IDs carry no date suffix. claude-opus-5 is the default; claude-sonnet-5
+# and claude-haiku-4-5 are cheaper if you are scoring at volume.
+#ai.anthropic.model=claude-opus-5
+#ai.anthropic.base-url=https://api.anthropic.com
+#ai.anthropic.timeout-seconds=30
+# max_tokens is required on every Anthropic request. Thinking tokens count
+# against it, so leave headroom above the size of the results JSON.
+#ai.anthropic.max-tokens=16000
+#ai.anthropic.version=2023-06-01
+# Sends the temperature parameter. OFF by default: current models (Opus 5,
+# Sonnet 5, Opus 4.7/4.8, Fable 5) reject sampling parameters with a 400.
+# Set true only for Opus 4.6, Sonnet 4.6, or older models.
+#ai.anthropic.send-temperature=false
+
+# ============================================
+# Rate limiting
+# ============================================
+# Applied by a decorator around whichever provider is selected. All three
+# default to 0 in code: only the Gemini free tier actually needs pacing, and the
+# values below are set for it. Drop them to 0 for a paid tier, OpenAI, or
+# Anthropic, which do not need artificial throttling.
+#
+#   delay-ms       pause after every successful call
+#   retry-delay-ms pause before retrying a 429 or 5xx
+#   max-retries    extra attempts after the first (0 disables retrying)
+ai.ratelimit.delay-ms=1500
+ai.ratelimit.retry-delay-ms=5000
+ai.ratelimit.max-retries=2
